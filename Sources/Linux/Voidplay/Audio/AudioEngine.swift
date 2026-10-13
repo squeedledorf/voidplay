@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 import CoreAudio
 import NullPlayerCore
 
@@ -168,6 +169,77 @@ class AudioEngine {
             currentTrack = playlist[currentIndex]
         }
         delegate?.audioEngineDidChangePlaylist()
+        enrichPlaylistDurationsAsync(for: valid.map(\.id))
+    }
+
+    /// Fills in duration for tracks that have duration == nil.
+    /// Looks up each URL in the MediaLibrary in-memory index first (instant, no I/O).
+    /// Falls back to AVAudioFile only for tracks not in the library — done off the main thread.
+    private func enrichPlaylistDurationsAsync(for trackIDs: [UUID]) {
+        guard !trackIDs.isEmpty else { return }
+        let idsToEnrich = Set(trackIDs)
+
+        // Snapshot tracks needing enrichment from the main actor.
+        let snapshots: [(id: UUID, url: URL)] = playlist.compactMap { t in
+            guard idsToEnrich.contains(t.id), (t.duration ?? 0) == 0, t.url.isFileURL else { return nil }
+            return (id: t.id, url: t.url)
+        }
+        guard !snapshots.isEmpty else { return }
+
+        // Try the MediaLibrary in-memory index first — O(1) per track, no disk I/O.
+        var durations: [UUID: TimeInterval] = [:]
+        var needsFileIO: [(id: UUID, url: URL)] = []
+        for item in snapshots {
+            if let lib = MediaLibrary.shared.findTrack(byURL: item.url), lib.duration > 0 {
+                durations[item.id] = lib.duration
+            } else {
+                needsFileIO.append(item)
+            }
+        }
+
+        // Apply library hits immediately on the main thread.
+        applyDurationUpdates(durations)
+
+        // For anything not in the library, fall back to AVAudioFile on a background thread.
+        guard !needsFileIO.isEmpty else { return }
+        Task.detached(priority: .utility) { [weak self] in
+            var fileDurations: [UUID: TimeInterval] = [:]
+            for item in needsFileIO {
+                guard let af = try? AVAudioFile(forReading: item.url) else { continue }
+                let dur = Double(af.length) / af.processingFormat.sampleRate
+                if dur > 0 { fileDurations[item.id] = dur }
+            }
+            guard !fileDurations.isEmpty else { return }
+            // Snapshot before the actor hop: `MainActor.run`'s closure is @Sendable.
+            let durationUpdates = fileDurations
+            await MainActor.run { [weak self] in
+                self?.applyDurationUpdates(durationUpdates)
+            }
+        }
+    }
+
+    /// Replaces playlist tracks whose UUIDs appear in `durations` with copies carrying the real duration.
+    /// Must be called on the main thread.
+    private func applyDurationUpdates(_ durations: [UUID: TimeInterval]) {
+        guard !durations.isEmpty else { return }
+        var changed = false
+        for (idx, track) in playlist.enumerated() {
+            guard let dur = durations[track.id] else { continue }
+            playlist[idx] = Track(
+                id: track.id, url: track.url, title: track.title,
+                artist: track.artist, album: track.album, duration: dur,
+                bitrate: track.bitrate, sampleRate: track.sampleRate,
+                channels: track.channels, plexRatingKey: track.plexRatingKey,
+                plexServerId: track.plexServerId, subsonicId: track.subsonicId,
+                subsonicServerId: track.subsonicServerId, jellyfinId: track.jellyfinId,
+                jellyfinServerId: track.jellyfinServerId, embyId: track.embyId,
+                embyServerId: track.embyServerId, artworkThumb: track.artworkThumb,
+                mediaType: track.mediaType, genre: track.genre,
+                contentType: track.contentType
+            )
+            changed = true
+        }
+        if changed { delegate?.audioEngineDidChangePlaylist() }
     }
 
     func appendTracks(_ tracks: [Track]) {
