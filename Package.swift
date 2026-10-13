@@ -21,6 +21,8 @@ let package = Package(
     targets: [
         // vDSP stand-in so upstream's `import Accelerate` compiles unchanged.
         .target(name: "Accelerate", path: "Sources/Linux/Accelerate"),
+        .systemLibrary(name: "CCairo", path: "Sources/Linux/CCairo", pkgConfig: "cairo"),
+        .target(name: "CoreGraphics", dependencies: ["CCairo"], path: "Sources/Linux/CoreGraphics"),
         .systemLibrary(name: "CGdkPixbuf", path: "Sources/Linux/CGdkPixbuf", pkgConfig: "gdk-pixbuf-2.0"),
         .target(name: "AppKit", dependencies: ["CGdkPixbuf"], path: "Sources/Linux/AppKit"),
         .systemLibrary(name: "CMpv", path: "Sources/Linux/CMpv", pkgConfig: "mpv"),
@@ -119,6 +121,11 @@ let package = Package(
             name: "VoidplayTests",
             dependencies: ["voidplay"],
             path: "Tests/Linux/VoidplayTests"
+        ),
+        .testTarget(
+            name: "CoreGraphicsTests",
+            dependencies: ["CoreGraphics"],
+            path: "Tests/Linux/CoreGraphicsTests"
         ),
         .testTarget(
             name: "AccelerateTests",
