@@ -11,7 +11,7 @@ class EmbyServerClient {
     private let baseURL: URL
 
     /// Client identifier for API calls
-    private let clientName = "NullPlayer"
+    private let clientName = ClientIdentity.productName
 
     /// Device ID for Emby session tracking
     private let deviceId: String
@@ -132,7 +132,7 @@ class EmbyServerClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         // Initial auth header: no UserId or Token yet
         request.setValue(
-            "Emby Client=\"NullPlayer\", Device=\"Mac\", DeviceId=\"\(deviceId)\", Version=\"1.0\"",
+            "Emby Client=\"\(ClientIdentity.productName)\", Device=\"\(ClientIdentity.deviceKind)\", DeviceId=\"\(deviceId)\", Version=\"1.0\"",
             forHTTPHeaderField: "Authorization"
         )
 

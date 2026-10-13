@@ -15,7 +15,7 @@ enum CLISourceError: LocalizedError {
             if let detail { return detail }
             return "No source specified. Use --source (local, plex, subsonic, jellyfin, emby, radio)"
         case .sourceNotConfigured(let source):
-            return "\(source) is not configured. Set up in NullPlayer GUI first."
+            return "\(source) is not configured. Set up in \(ClientIdentity.productName) GUI first."
         case .noTracksFound(let detail):
             return "No tracks found \(detail)"
         case .invalidRadioMode(let mode, let source, let available):

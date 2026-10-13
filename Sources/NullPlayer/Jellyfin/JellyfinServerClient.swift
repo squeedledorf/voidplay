@@ -11,7 +11,7 @@ class JellyfinServerClient {
     private let baseURL: URL
     
     /// Client identifier for API calls
-    private static let clientName = "NullPlayer"
+    private static let clientName = ClientIdentity.productName
     
     /// Device ID for Jellyfin session tracking
     private let deviceId: String
@@ -94,7 +94,7 @@ class JellyfinServerClient {
     /// The `Authorization` value Jellyfin expects on every request. The token rides here, not in
     /// X-Emby-Token: Jellyfin 12.0 disables the legacy header by default and answers 401 to it.
     static func authorization(deviceId: String, token: String = "") -> String {
-        var value = "MediaBrowser Client=\"\(clientName)\", Device=\"Mac\", DeviceId=\"\(deviceId)\", Version=\"1.0\""
+        var value = "MediaBrowser Client=\"\(clientName)\", Device=\"\(ClientIdentity.deviceKind)\", DeviceId=\"\(deviceId)\", Version=\"1.0\""
         if !token.isEmpty {
             value += ", Token=\"\(token)\""
         }

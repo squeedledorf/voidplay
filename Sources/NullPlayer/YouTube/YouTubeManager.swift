@@ -81,7 +81,7 @@ final class YouTubeManager {
             return URL(fileURLWithPath: savedPath).standardizedFileURL
         }
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return appSupport.appendingPathComponent("NullPlayer/YouTube/").standardizedFileURL
+        return appSupport.appendingPathComponent("\(ClientIdentity.dataDirectoryName)/YouTube/").standardizedFileURL
     }
 
     /// Whether `url` points to a file inside the YouTube download folder. Lets play-history
@@ -151,7 +151,7 @@ final class YouTubeManager {
         } else {
             // Default: ~/Library/Application Support/NullPlayer/YouTube/
             let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            _downloadRoot = appSupport.appendingPathComponent("NullPlayer/YouTube/").standardizedFileURL
+            _downloadRoot = appSupport.appendingPathComponent("\(ClientIdentity.dataDirectoryName)/YouTube/").standardizedFileURL
             // Eagerly create the default local folder so the very first download works.
             // (User-chosen folders go through the `downloadRoot` setter instead, which
             // gates creation on reachability to avoid writing into a stale NAS mount.)

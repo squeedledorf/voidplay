@@ -74,7 +74,7 @@ class PlexRadioHistory {
             NSLog("PlexRadioHistory: Cannot locate Application Support directory")
             return
         }
-        let dir = appSupport.appendingPathComponent("NullPlayer")
+        let dir = appSupport.appendingPathComponent(ClientIdentity.dataDirectoryName)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let dbPath = dir.appendingPathComponent("plex_radio_history.db").path
 

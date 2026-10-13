@@ -550,7 +550,7 @@ class MediaLibrary {
     private init() {
         // Create library directory
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let libraryDir = appSupport.appendingPathComponent("NullPlayer", isDirectory: true)
+        let libraryDir = appSupport.appendingPathComponent(ClientIdentity.dataDirectoryName, isDirectory: true)
         
         try? FileManager.default.createDirectory(at: libraryDir, withIntermediateDirectories: true)
         

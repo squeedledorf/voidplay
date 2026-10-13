@@ -37,12 +37,12 @@ class PlexAuthClient {
     private var standardHeaders: [String: String] {
         [
             "X-Plex-Client-Identifier": clientIdentifier,
-            "X-Plex-Product": "NullPlayer",
+            "X-Plex-Product": ClientIdentity.productName,
             "X-Plex-Version": "1.0",
             "X-Plex-Platform": "macOS",
             "X-Plex-Platform-Version": ProcessInfo.processInfo.operatingSystemVersionString,
-            "X-Plex-Device": "Mac",
-            "X-Plex-Device-Name": Host.current().localizedName ?? "Mac",
+            "X-Plex-Device": ClientIdentity.deviceKind,
+            "X-Plex-Device-Name": Host.current().localizedName ?? ClientIdentity.deviceKind,
             "Accept": "application/json",
             "Content-Type": "application/x-www-form-urlencoded"
         ]

@@ -77,6 +77,7 @@ let package = Package(
                 "NullPlayer/YouTube/YouTubeModels.swift",
                 "NullPlayer/YouTube/YouTubeRows.swift",
                 "NullPlayer/App/AppCapabilities.swift",
+                "NullPlayer/App/ClientIdentity.swift",
                 "NullPlayer/App/PlayerUIMode.swift",
                 "NullPlayer/ModernSkin/ModernSkinFamily.swift",
                 "NullPlayer/Windows/Shared/LibraryBrowserTabSort.swift",

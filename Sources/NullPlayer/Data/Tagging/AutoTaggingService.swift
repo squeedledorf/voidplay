@@ -929,7 +929,7 @@ struct DiscogsTaggingClient {
             await HTTPHostThrottle.shared.waitIfNeeded(for: host, minInterval: 0.45)
         }
         var request = URLRequest(url: url)
-        request.setValue("NullPlayer/1.0 (metadata auto-tag)", forHTTPHeaderField: "User-Agent")
+        request.setValue("\(ClientIdentity.productName)/1.0 (metadata auto-tag)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
@@ -1080,7 +1080,7 @@ struct MusicBrainzTaggingClient {
             await HTTPHostThrottle.shared.waitIfNeeded(for: host, minInterval: 0.8)
         }
         var request = URLRequest(url: url)
-        request.setValue("NullPlayer/1.0 (metadata auto-tag)", forHTTPHeaderField: "User-Agent")
+        request.setValue("\(ClientIdentity.productName)/1.0 (metadata auto-tag)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode >= 400 {

@@ -152,10 +152,10 @@ class CLIDisplay {
 
     static func printHelp() {
         print("""
-        NullPlayer CLI Mode
+        \(ClientIdentity.productName) CLI Mode
 
         USAGE:
-            nullplayer --cli [OPTIONS]
+            \(ClientIdentity.commandName) --cli [OPTIONS]
 
         QUERY COMMANDS (print and exit):
             --list-sources              List configured sources
@@ -216,7 +216,7 @@ class CLIDisplay {
             --color-art                 Force color art (truecolor/256-color)
             --ascii-art                 Force monochrome character-ramp art
                                         (default auto-detects terminal color support;
-                                        set NULLPLAYER_ART=ascii|color|auto to pin a
+                                        set VOIDPLAY_ART=ascii|color|auto to pin a
                                         per-terminal default)
             --json                      JSON output for queries
 
@@ -242,7 +242,7 @@ class CLIDisplay {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
             ?? Bundle(for: CLIDisplay.self).infoDictionary?["CFBundleShortVersionString"] as? String
             ?? "unknown"
-        print("nullplayer -> NullPlayer \(version)")
+        print("\(ClientIdentity.commandName) -> \(ClientIdentity.productName) \(version)")
     }
 
     // MARK: - ASCII Art
@@ -294,7 +294,7 @@ class CLIDisplay {
             // in a shell profile makes every terminal claim truecolor even when it renders
             // monochrome). NULLPLAYER_ART lets such a terminal pin `ascii` in its profile
             // without passing a flag every time. Unset/"auto"/unrecognized → auto-detect.
-            switch ProcessInfo.processInfo.environment["NULLPLAYER_ART"]?.lowercased() {
+            switch ProcessInfo.processInfo.environment["VOIDPLAY_ART"]?.lowercased() {
             case "ascii", "mono": asciiMode = true
             case "color":         asciiMode = false
             default:              asciiMode = (detected == .mono)

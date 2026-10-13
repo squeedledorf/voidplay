@@ -9,7 +9,7 @@ import Foundation
 final class YouTubeChannelUploads {
     static let shared = YouTubeChannelUploads(
         file: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("NullPlayer/youtube_uploads.json"))
+            .appendingPathComponent("\(ClientIdentity.dataDirectoryName)/youtube_uploads.json"))
 
     /// A fetch started or finished: rows and channel spinners changed.
     static let didChangeNotification = Notification.Name("YouTubeChannelUploadsDidChange")

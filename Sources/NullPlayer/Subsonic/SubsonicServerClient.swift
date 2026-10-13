@@ -15,7 +15,7 @@ class SubsonicServerClient {
     private let apiVersion = "1.16.1"
     
     /// Client identifier for API calls
-    private let clientName = "NullPlayer"
+    private let clientName = ClientIdentity.productName
     
     /// Number of retry attempts for failed requests
     private let maxRetries = 3

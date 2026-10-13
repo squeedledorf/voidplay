@@ -21,7 +21,7 @@ final class RadioStationRatingsStore {
             NSLog("RadioStationRatingsStore: Cannot locate Application Support directory")
             return
         }
-        let dir = appSupport.appendingPathComponent("NullPlayer")
+        let dir = appSupport.appendingPathComponent(ClientIdentity.dataDirectoryName)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700])
         let dbPath = dir.appendingPathComponent("radio_station_ratings.db").path
