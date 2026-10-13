@@ -46,6 +46,13 @@ open class NSApplication {
         // LC_NUMERIC "C", or a locale with decimal commas breaks both.
         setlocale(LC_NUMERIC, "C")
         MainLoop.install()
+        // Logout, `kill` and Ctrl+C quit like the Quit command, so settings reach disk.
+        for signal in [SIGTERM, SIGINT, SIGHUP] {
+            g_unix_signal_add(signal, { _ in
+                MainActor.assumeIsolated { NSApplication.shared.terminate(nil) }
+                return 0
+            }, nil)
+        }
         CALayer.didChange = { NSApplication.scheduleLayerRedraw() }
         isRunning = true
         let launched = Notification(name: Self.didFinishLaunchingNotification, object: self)
@@ -77,6 +84,8 @@ open class NSApplication {
         let note = Notification(name: Self.willTerminateNotification, object: self)
         delegate?.applicationWillTerminate(note)
         NotificationCenter.default.post(note)
+        // Darwin's cfprefsd saves defaults on its own; Foundation here only writes on sync.
+        UserDefaults.standard.synchronize()
         exit(0)
     }
 }

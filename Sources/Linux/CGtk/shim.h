@@ -1,4 +1,5 @@
 #include <gtk/gtk.h>
+#include <glib-unix.h>
 #include <pango/pangocairo.h>
 
 // Function-like macros Swift cannot import.
