@@ -103,3 +103,30 @@ public func vDSP_meanv(_ a: UnsafePointer<Float>, _ stride: vDSP_Stride,
     for i in 0..<Int(n) { s += a[i * stride] }
     c.pointee = n == 0 ? 0 : s / Float(n)
 }
+
+// MARK: Windows and element-wise ops (the visualization tap)
+
+public let vDSP_HANN_NORM: Int32 = 0
+public let vDSP_HANN_DENORM: Int32 = 1
+public let vDSP_HALF_WINDOW: Int32 = 4
+
+/// Hann window: 0.5·(1 − cos 2πn/N), or 0.8165·(1 − cos 2πn/N) normalised (RMS 1), as Apple's.
+public func vDSP_hann_window(_ c: UnsafeMutablePointer<Float>, _ n: vDSP_Length, _ flag: Int32) {
+    let count = Int(n)
+    let scale: Float = flag & vDSP_HANN_DENORM != 0 ? 0.5 : 0.8165
+    let length = flag & vDSP_HALF_WINDOW != 0 ? (count + 1) / 2 : count
+    for i in 0..<length { c[i] = scale * (1 - Float(cos(2 * Double.pi * Double(i) / Double(count)))) }
+}
+
+/// C[i] = A[i] · B[i]
+public func vDSP_vmul(_ a: UnsafePointer<Float>, _ ia: vDSP_Stride, _ b: UnsafePointer<Float>, _ ib: vDSP_Stride,
+                      _ c: UnsafeMutablePointer<Float>, _ ic: vDSP_Stride, _ n: vDSP_Length) {
+    for i in 0..<Int(n) { c[i * ic] = a[i * ia] * b[i * ib] }
+}
+
+/// C[i] = α·log10(A[i] / B), α = 10 for power (F = 0), 20 for amplitude (F = 1).
+public func vDSP_vdbcon(_ a: UnsafePointer<Float>, _ ia: vDSP_Stride, _ b: UnsafePointer<Float>,
+                        _ c: UnsafeMutablePointer<Float>, _ ic: vDSP_Stride, _ n: vDSP_Length, _ f: UInt32) {
+    let alpha: Float = f == 0 ? 10 : 20
+    for i in 0..<Int(n) { c[i * ic] = alpha * log10(a[i * ia] / b.pointee) }
+}

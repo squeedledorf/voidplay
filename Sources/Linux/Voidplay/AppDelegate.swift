@@ -9,6 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AudioEngineDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowManager.audioEngine.delegate = self
+        // Main window always shows a mini spectrum overlay — register as permanent consumer
+        windowManager.audioEngine.addSpectrumConsumer("mainWindowSpectrum")
         NowPlayingManager.shared.setup()
         windowManager.loadDefaultSkin()
         windowManager.showMainWindow()

@@ -60,6 +60,7 @@ class AudioEngine {
     private(set) var state: PlaybackState = .stopped {
         didSet {
             guard state != oldValue else { return }
+            updateCapture()
             delegate?.audioEngineDidChangeState(state)
             NotificationCenter.default.post(name: .audioPlaybackStateChanged, object: self, userInfo: ["state": state])
         }
@@ -123,6 +124,12 @@ class AudioEngine {
     private var eqGains = [Float](repeating: 0, count: EQConfiguration.classic10.bandCount)
     private(set) var activeEQConfiguration = EQConfiguration.classic10
 
+    /// `VOIDPLAY_AUDIO_OUTPUT=null` makes a whole run silent (mpv's `ao`): every automated test
+    /// of the app sets it, so nothing a test plays reaches real speakers or headphones.
+    private static var environmentOptions: [String: String] {
+        ProcessInfo.processInfo.environment["VOIDPLAY_AUDIO_OUTPUT"].map { ["ao": $0] } ?? [:]
+    }
+
     /// `mpvOptions` overrides the defaults; tests pass a silent, untimed output.
     init(mpvOptions: [String: String] = [:]) {
         guard let mpv = MpvPlayer(options: [
@@ -140,7 +147,7 @@ class AudioEngine {
             "ytdl-format": "bestaudio/best",
             "input-default-bindings": "no",
             "audio-pitch-correction": "yes",
-        ].merging(mpvOptions) { $1 }) else {
+        ].merging(Self.environmentOptions) { $1 }.merging(mpvOptions) { $1 }) else {
             fatalError("libmpv failed to initialise")
         }
         self.mpv = mpv
@@ -148,6 +155,7 @@ class AudioEngine {
         mpv.set("volume", Double(volume) * 100)
         tuningController.loadFromDefaults()
         applyAudioFilters()
+        visualization.engine = self
     }
 
     // MARK: Queue
@@ -746,20 +754,48 @@ class AudioEngine {
 
     var mpvAudioDevices: [[String: Any]] { mpv.node("audio-device-list") as? [[String: Any]] ?? [] }
 
-    // MARK: Analysis consumers
-    // ponytail: counted only; PCM/spectrum taps (from a PipeWire monitor of mpv's stream) arrive
-    // with the visualizer stage, and these counts will gate that capture.
+    // MARK: Analysis (VisualizationTap, fed by PipeWireCapture)
 
-    private var fullStereoConsumers: [String: Int] = [:]
-
-    func addFullStereoConsumer(_ id: String) { fullStereoConsumers[id, default: 0] += 1 }
-
-    func removeFullStereoConsumer(_ id: String) {
-        guard let count = fullStereoConsumers[id] else { return }
-        fullStereoConsumers[id] = count > 1 ? count - 1 : nil
+    let visualization = VisualizationTap()
+    private lazy var capture = PipeWireCapture { [weak self] channels, frames, rate in
+        self?.visualization.process(channels: channels, frames: frames, sampleRate: rate)
     }
+    private var captureRetry: DispatchWorkItem?
 
-    var fullStereoNeeded: Bool { !fullStereoConsumers.isEmpty }
+    var spectrumData: [Float] { visualization.spectrumData }
+    var pcmData: [Float] { visualization.pcmData }
+    var pcmSampleRate: Double { visualization.pcmSampleRate }
+
+    func addSpectrumConsumer(_ id: String) { visualization.addSpectrumConsumer(id); updateCapture() }
+    func removeSpectrumConsumer(_ id: String) { visualization.removeSpectrumConsumer(id); updateCapture() }
+    var spectrumNeeded: Bool { visualization.spectrumNeeded }
+    func addWaveformConsumer(_ id: String) { visualization.addWaveformConsumer(id); updateCapture() }
+    func removeWaveformConsumer(_ id: String) { visualization.removeWaveformConsumer(id); updateCapture() }
+    var waveformNeeded: Bool { visualization.waveformNeeded }
+    func addStereoConsumer(_ id: String) { visualization.addStereoConsumer(id); updateCapture() }
+    func removeStereoConsumer(_ id: String) { visualization.removeStereoConsumer(id); updateCapture() }
+    var stereoNeeded: Bool { visualization.stereoNeeded }
+    func addFullStereoConsumer(_ id: String) { visualization.addFullStereoConsumer(id); updateCapture() }
+    func removeFullStereoConsumer(_ id: String) { visualization.removeFullStereoConsumer(id); updateCapture() }
+    var fullStereoNeeded: Bool { visualization.fullStereoNeeded }
+    func addMagnitudesConsumer(_ id: String) { visualization.addMagnitudesConsumer(id); updateCapture() }
+    func removeMagnitudesConsumer(_ id: String) { visualization.removeMagnitudesConsumer(id); updateCapture() }
+    var magnitudesNeeded: Bool { visualization.magnitudesNeeded }
+
+    /// Capture runs while something plays and someone is watching. mpv creates its output stream
+    /// when the first track opens, so the first attempts can come too early: retry briefly.
+    private func updateCapture(attempt: Int = 0) {
+        captureRetry?.cancel()
+        guard state == .playing, visualization.anyConsumer else {
+            if state == .stopped || !visualization.anyConsumer { capture.stop() }
+            if state != .playing { visualization.clear() }
+            return
+        }
+        guard !capture.isRunning, !capture.start(), attempt < 20 else { return }
+        let retry = DispatchWorkItem { [weak self] in self?.updateCapture(attempt: attempt + 1) }
+        captureRetry = retry
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: retry)
+    }
 
     // MARK: Casting (not on Linux yet)
 
