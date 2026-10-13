@@ -77,3 +77,4 @@ Sources/NullPlayer/Windows/WMPSkin/WMPHostedFrameProvider.swift#L810-827
 Sources/NullPlayer/App/PlaylistMenuBuilder.swift
 Sources/NullPlayer/WinampModern/WasabiPalette.swift
 Sources/NullPlayer/WinampModern/WinampModernSurfaceStyle.swift
+Sources/NullPlayer/App/NowPlayingManager.swift

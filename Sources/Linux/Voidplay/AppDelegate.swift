@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AudioEngineDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowManager.audioEngine.delegate = self
+        NowPlayingManager.shared.setup()
         windowManager.loadDefaultSkin()
         windowManager.showMainWindow()
         windowManager.showEqualizer()
@@ -33,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AudioEngineDelegate {
 
     func audioEngineDidUpdateTime(current: TimeInterval, duration: TimeInterval) {
         windowManager.mainWindowController?.updateTime(current: current, duration: duration)
+        NowPlayingManager.shared.periodicTimeUpdate()  // keeps MPRIS Position honest after seeks
     }
 
     func audioEngineDidChangeTrack(_ track: Track?) {

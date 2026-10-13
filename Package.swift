@@ -42,6 +42,7 @@ let package = Package(
         .target(name: "QuartzCore", dependencies: ["CoreGraphics"], path: "Sources/Linux/QuartzCore"),
         .target(name: "CoreImage", dependencies: ["CoreGraphics"], path: "Sources/Linux/CoreImage"),
         .target(name: "UniformTypeIdentifiers", path: "Sources/Linux/UniformTypeIdentifiers"),
+        .target(name: "MediaPlayer", dependencies: ["AppKit", "CGtk"], path: "Sources/Linux/MediaPlayer"),
         .target(name: "os", path: "Sources/Linux/os"),
         .target(name: "Metal", path: "Sources/Linux/Metal"),
         .target(name: "MetalKit", dependencies: ["Metal"], path: "Sources/Linux/MetalKit"),
@@ -67,7 +68,7 @@ let package = Package(
         .executableTarget(
             name: "voidplay",
             dependencies: [
-                "NullPlayerCore", "Accelerate", "AppKit", "CMpv", "QuartzCore", "CoreImage", "UniformTypeIdentifiers", "os", "Metal", "MetalKit", "CVisClassicCore", "AVFoundation", "CoreAudio", "CryptoKit", "ZIPFoundation", "FlyingFox",
+                "NullPlayerCore", "Accelerate", "AppKit", "CMpv", "QuartzCore", "CoreImage", "UniformTypeIdentifiers", "os", "Metal", "MetalKit", "MediaPlayer", "CVisClassicCore", "AVFoundation", "CoreAudio", "CryptoKit", "ZIPFoundation", "FlyingFox",
                 .product(name: "SQLite", package: "SQLite.swift"),
             ],
             path: "Sources",
