@@ -14,7 +14,7 @@ public struct CATransform3D: Equatable, Sendable {
     public init() {}
 
     /// The 2D part, as Core Graphics applies it.
-    var affine: CGAffineTransform { CGAffineTransform(a: m11, b: m12, c: m21, d: m22, tx: m41, ty: m42) }
+    public var affine: CGAffineTransform { CGAffineTransform(a: m11, b: m12, c: m21, d: m22, tx: m41, ty: m42) }
 }
 
 public let CATransform3DIdentity = CATransform3D()
@@ -93,19 +93,24 @@ open class CABasicAnimation: CAPropertyAnimation {
 /// A rectangle of content in a tree, positioned by `position`/`anchorPoint`, painted from
 /// `contents` (a CGImage) or `draw(in:)`.
 open class CALayer: NSObject {
-    open var bounds: CGRect = .zero { didSet { if bounds.size != oldValue.size { setNeedsLayout() } } }
-    open var position: CGPoint = .zero
+    /// Called when any layer changes how it draws; AppKit points it at "redraw the windows".
+    nonisolated(unsafe) public static var didChange: (() -> Void)?
+
+    open var bounds: CGRect = .zero {
+        didSet { if bounds.size != oldValue.size { setNeedsLayout() }; if bounds != oldValue { Self.didChange?() } }
+    }
+    open var position: CGPoint = .zero { didSet { if position != oldValue { Self.didChange?() } } }
     open var anchorPoint = CGPoint(x: 0.5, y: 0.5)
     open var zPosition: CGFloat = 0
-    open var transform = CATransform3DIdentity
-    open var contents: Any?
+    open var transform = CATransform3DIdentity { didSet { Self.didChange?() } }
+    open var contents: Any? { didSet { Self.didChange?() } }
     open var contentsScale: CGFloat = 1
     open var contentsGravity: CALayerContentsGravity = .resize
     open var contentsRect = CGRect(x: 0, y: 0, width: 1, height: 1)
     open var masksToBounds = false
-    open var isHidden = false
-    open var opacity: Float = 1
-    open var backgroundColor: CGColor?
+    open var isHidden = false { didSet { if isHidden != oldValue { Self.didChange?() } } }
+    open var opacity: Float = 1 { didSet { Self.didChange?() } }
+    open var backgroundColor: CGColor? { didSet { Self.didChange?() } }
     open var borderColor: CGColor?
     open var borderWidth: CGFloat = 0
     open var cornerRadius: CGFloat = 0
@@ -152,6 +157,7 @@ open class CALayer: NSObject {
         layer.removeFromSuperlayer()
         sublayers = (sublayers ?? []) + [layer]
         layer.superlayer = self
+        Self.didChange?()
     }
 
     open func insertSublayer(_ layer: CALayer, at index: UInt32) {
@@ -175,6 +181,7 @@ open class CALayer: NSObject {
     open func removeFromSuperlayer() {
         superlayer?.sublayers?.removeAll { $0 === self }
         superlayer = nil
+        Self.didChange?()
     }
 
     // MARK: Display and layout
@@ -195,6 +202,7 @@ open class CALayer: NSObject {
     open func add(_ animation: CAAnimation, forKey key: String?) {
         let start = animation.beginTime > 0 ? animation.beginTime : convertTime(CACurrentMediaTime(), from: nil)
         animations[key ?? UUID().uuidString] = (animation, start)
+        Self.didChange?()
     }
 
     open func removeAnimation(forKey key: String) { animations[key] = nil }

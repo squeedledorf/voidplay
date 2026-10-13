@@ -108,6 +108,11 @@ let package = Package(
             path: "Tests/Linux/SourceTransformTests"
         ),
         .testTarget(
+            name: "AppKitTests",
+            dependencies: ["AppKit"],
+            path: "Tests/Linux/AppKitTests"
+        ),
+        .testTarget(
             name: "AccelerateTests",
             dependencies: ["Accelerate"],
             path: "Tests/Linux/AccelerateTests"

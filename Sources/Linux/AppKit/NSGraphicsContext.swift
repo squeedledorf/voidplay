@@ -33,17 +33,38 @@ open class NSGraphicsContext {
         self.init(cgContext: ctx, flipped: false)
     }
 
-    public static var current: NSGraphicsContext?
-    private static var stack: [NSGraphicsContext?] = []
+    /// Per thread, as in AppKit: background renderers (the marquee) draw while the main thread does.
+    private final class ThreadState {
+        var current: NSGraphicsContext?
+        var stack: [NSGraphicsContext?] = []
+    }
+
+    private static var threadState: ThreadState {
+        let key = "VoidplayNSGraphicsContext"
+        if let state = Thread.current.threadDictionary[key] as? ThreadState { return state }
+        let state = ThreadState()
+        Thread.current.threadDictionary[key] = state
+        return state
+    }
+
+    public static var current: NSGraphicsContext? {
+        get { threadState.current }
+        set { threadState.current = newValue }
+    }
 
     public static func saveGraphicsState() {
-        stack.append(current)
-        current?.cgContext.saveGState()
+        let state = threadState
+        state.stack.append(state.current)
+        state.current?.cgContext.saveGState()
     }
 
     public static func restoreGraphicsState() {
-        current?.cgContext.restoreGState()
-        if let previous = stack.popLast() { current = previous }
+        // Pops back to the saved context and its state, as AppKit does; restoring the context set
+        // since then would unbalance its CG stack (Cairo then fails every later call on it).
+        let state = threadState
+        guard let previous = state.stack.popLast() else { return }
+        previous?.cgContext.restoreGState()
+        state.current = previous
     }
 
     open func saveGraphicsState() { cgContext.saveGState() }
