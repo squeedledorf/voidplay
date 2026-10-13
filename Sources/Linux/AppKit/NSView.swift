@@ -260,8 +260,17 @@ open class NSView: NSResponder {
     // MARK: Events and tracking
 
     open func acceptsFirstMouse(for event: NSEvent?) -> Bool { false }
-    open func menu(for event: NSEvent) -> NSMenu? { nil }
+    open func menu(for event: NSEvent) -> NSMenu? { menu }
     open var menu: NSMenu?
+
+    /// As AppKit: a right click shows the view's context menu, else travels up the responder chain.
+    open override func rightMouseDown(with event: NSEvent) {
+        if let menu = menu(for: event) {
+            NSMenu.popUpContextMenu(menu, with: event, for: self)
+        } else {
+            super.rightMouseDown(with: event)
+        }
+    }
 
     open func addTrackingArea(_ area: NSTrackingArea) { trackingAreas.append(area) }
     open func removeTrackingArea(_ area: NSTrackingArea) { trackingAreas.removeAll { $0 === area } }
