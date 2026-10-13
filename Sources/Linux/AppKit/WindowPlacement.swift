@@ -77,6 +77,45 @@ final class HyprlandPlacement: WindowPlacement {
 
     init(ipc: HyprlandIPC) { self.ipc = ipc }
 
+    /// Window operations, spelled per config dialect: a Lua config (Hyprland 0.55+) only takes
+    /// `hl.dsp.*` calls, older or hyprlang configs only the classic dispatcher names.
+    private enum Op {
+        case float
+        case move(x: Int, y: Int)
+        case resize(width: Int, height: Int)
+        case prop(lua: String, legacy: String, value: Int)
+
+        func command(address: String, lua: Bool) -> String {
+            let window = "window = 'address:\(address)'"
+            switch (self, lua) {
+            case (.float, true): return "dispatch hl.dsp.window.float({ action = 'enable', \(window) })"
+            case (.float, false): return "dispatch setfloating address:\(address)"
+            case let (.move(x, y), true): return "dispatch hl.dsp.window.move({ x = \(x), y = \(y), \(window) })"
+            case let (.move(x, y), false): return "dispatch movewindowpixel exact \(x) \(y),address:\(address)"
+            case let (.resize(w, h), true): return "dispatch hl.dsp.window.resize({ x = \(w), y = \(h), \(window) })"
+            case let (.resize(w, h), false): return "dispatch resizewindowpixel exact \(w) \(h),address:\(address)"
+            case let (.prop(name, _, value), true):
+                return "dispatch hl.dsp.window.set_prop({ prop = '\(name)', value = '\(value)', \(window) })"
+            case let (.prop(_, name, value), false): return "setprop address:\(address) \(name) \(value)"
+            }
+        }
+    }
+
+    private var luaDialect = true
+
+    private func run(_ ops: [Op], on address: String) {
+        func send() -> String {
+            let batch = ops.map { $0.command(address: address, lua: luaDialect) }.joined(separator: ";")
+            return ipc.request("[[BATCH]]" + batch).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        }
+        let reply = send()
+        // A hyprlang config rejects the Lua spelling as an unknown dispatcher; switch once and resend.
+        if luaDialect, reply.contains("Invalid dispatcher") || reply.contains("unknown request") {
+            luaDialect = false
+            _ = send()
+        }
+    }
+
     override func windowDidMap(_ window: NSWindow) { resolve(window, attempt: 0) }
 
     /// Finds this window among Hyprland's clients by its placement token (retrying while
@@ -89,14 +128,16 @@ final class HyprlandPlacement: WindowPlacement {
            let address = client["address"] as? String {
             window.placementID = address
             gtk_window_set_title(window.gtkWindowPtr, window.title)
-            var batch = ["dispatch setfloating address:\(address)"]
+            var ops: [Op] = [.float]
             if !window.styleMask.contains(.titled) {
                 // Skinned windows draw their own frame: no border, rounding, shadow or blur from Hyprland.
-                for prop in ["bordersize 0", "rounding 0", "noshadow 1", "noblur 1", "decorate 0"] {
-                    batch.append("setprop address:\(address) \(prop)")
-                }
+                ops += [.prop(lua: "border_size", legacy: "bordersize", value: 0),
+                        .prop(lua: "rounding", legacy: "rounding", value: 0),
+                        .prop(lua: "no_shadow", legacy: "noshadow", value: 1),
+                        .prop(lua: "no_blur", legacy: "noblur", value: 1),
+                        .prop(lua: "decorate", legacy: "decorate", value: 0)]
             }
-            ipc.request("[[BATCH]]" + batch.joined(separator: ";"))
+            run(ops, on: address)
             place(window, resized: true)
             return
         }
@@ -110,11 +151,9 @@ final class HyprlandPlacement: WindowPlacement {
     override func place(_ window: NSWindow, resized: Bool) {
         guard let address = window.placementID else { return }
         let topLeft = NSScreen.layoutTopLeft(of: window.frame)
-        var batch = ["dispatch movewindowpixel exact \(Int(topLeft.x.rounded())) \(Int(topLeft.y.rounded())),address:\(address)"]
-        if resized {
-            batch.append("dispatch resizewindowpixel exact \(Int(window.frame.width)) \(Int(window.frame.height)),address:\(address)")
-        }
-        ipc.request("[[BATCH]]" + batch.joined(separator: ";"))
+        var ops: [Op] = [.move(x: Int(topLeft.x.rounded()), y: Int(topLeft.y.rounded()))]
+        if resized { ops.append(.resize(width: Int(window.frame.width), height: Int(window.frame.height))) }
+        run(ops, on: address)
         window.windowWasMovedByApp()
     }
 

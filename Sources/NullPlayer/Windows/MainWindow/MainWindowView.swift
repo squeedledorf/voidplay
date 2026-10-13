@@ -924,7 +924,7 @@ class MainWindowView: NSView {
         }
         
         // Priority 4: Track title
-        return currentTrack?.displayTitle ?? "NullPlayer"
+        return currentTrack?.displayTitle ?? ClientIdentity.productName
     }
     
     // MARK: - Drawing

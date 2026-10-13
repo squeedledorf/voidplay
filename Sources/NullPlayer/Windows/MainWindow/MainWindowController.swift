@@ -31,7 +31,7 @@ class MainWindowController: NSWindowController, MainWindowProviding {
         window.isOpaque = false
         window.hasSkinShadow = true
         window.level = .normal
-        window.title = "NullPlayer"
+        window.title = ClientIdentity.productName
         
         // Set minimum size for main window
         window.minSize = Skin.mainWindowSize

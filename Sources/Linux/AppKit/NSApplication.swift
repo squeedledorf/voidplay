@@ -39,6 +39,8 @@ open class NSApplication {
     public init() {}
 
     open func run() {
+        // Names the app for the desktop: the Wayland app id (Hyprland "class") and the X11 WM_CLASS.
+        g_set_prgname("voidplay")
         gtk_init()
         // gtk_init adopts the environment's locale; libmpv (and number parsing in skins) needs
         // LC_NUMERIC "C", or a locale with decimal commas breaks both.
