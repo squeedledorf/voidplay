@@ -1,4 +1,8 @@
+#if canImport(AppKit)
 import AppKit
+#else
+import Foundation
+#endif
 
 // =============================================================================
 // SKIN ELEMENTS - Sprite coordinates and layout constants

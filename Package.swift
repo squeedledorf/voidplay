@@ -8,6 +8,32 @@ import PackageDescription
 // swiftbuild build system resolves NullPlayer's imports again while scanning the test target.
 let vlcKitSearchPath: SwiftSetting = .unsafeFlags(["-F", "Frameworks"])
 
+#if os(Linux)
+// Voidplay: the Linux build. The macOS manifest below is upstream's, untouched.
+let package = Package(
+    name: "Voidplay",
+    targets: [
+        // vDSP stand-in so upstream's `import Accelerate` compiles unchanged.
+        .target(name: "Accelerate", path: "Sources/Linux/Accelerate"),
+        .target(
+            name: "NullPlayerCore",
+            dependencies: ["Accelerate"],
+            path: "Sources/NullPlayerCore"
+        ),
+        .testTarget(
+            name: "NullPlayerCoreTests",
+            dependencies: ["NullPlayerCore"],
+            path: "Tests/NullPlayerCoreTests"
+        ),
+        .testTarget(
+            name: "AccelerateTests",
+            dependencies: ["Accelerate"],
+            path: "Tests/Linux/AccelerateTests"
+        ),
+    ],
+    swiftLanguageModes: [.v5]
+)
+#else
 let package = Package(
     name: "NullPlayer",
     defaultLocalization: "en",
@@ -213,3 +239,4 @@ let package = Package(
     // compatible with CGeissCore / CVisClassicCore code.
     cxxLanguageStandard: .cxx17
 )
+#endif
