@@ -20,7 +20,7 @@ class CLIKeyboard {
     private func enableRawMode() {
         tcgetattr(STDIN_FILENO, &CLIKeyboard.originalTermios)
         var raw = CLIKeyboard.originalTermios
-        raw.c_lflag &= ~UInt(ICANON | ECHO)
+        raw.c_lflag &= ~tcflag_t(ICANON | ECHO)
         // c_cc is a C tuple in Swift — must use withUnsafeMutablePointer to index it
         withUnsafeMutablePointer(to: &raw.c_cc) {
             let ptr = UnsafeMutableRawPointer($0).assumingMemoryBound(to: cc_t.self)

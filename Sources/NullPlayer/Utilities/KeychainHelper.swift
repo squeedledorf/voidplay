@@ -1,5 +1,7 @@
 import Foundation
+#if os(macOS)
 import Security
+#endif
 import NullPlayerCore
 
 /// Helper for secure storage of sensitive data
@@ -15,7 +17,11 @@ class KeychainHelper {
     /// Raw binaries from `swift build` are unsigned and generate per-item
     /// Keychain prompts. Falls back to UserDefaults in dev.
     private var useKeychain: Bool {
+        #if os(Linux)
+        return true  // Secret Service has no per-binary prompts, so there is no dev fallback to need.
+        #else
         return Bundle.main.bundlePath.hasSuffix(".app")
+        #endif
     }
     
     private init() {}
@@ -305,7 +311,44 @@ class KeychainHelper {
     }
     
     // MARK: - Keychain Storage (Production)
-    
+
+    #if os(Linux)
+    // Linux: the freedesktop Secret Service (gnome-keyring, KWallet) through libsecret's secret-tool.
+    // Values are base64 so binary data survives the text interface.
+
+    @discardableResult
+    private func secretTool(_ args: [String], input: String? = nil) -> (status: Int32, output: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["secret-tool"] + args
+        let stdout = Pipe(), stdin = Pipe()
+        process.standardOutput = stdout
+        process.standardInput = stdin
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { return (-1, "") }
+        if let input { stdin.fileHandleForWriting.write(Data(input.utf8)) }
+        try? stdin.fileHandleForWriting.close()
+        let output = stdout.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return (process.terminationStatus, String(decoding: output, as: UTF8.self))
+    }
+
+    private func setDataKeychain(_ data: Data, forKey key: String) -> Bool {
+        secretTool(["store", "--label=Voidplay \(key)", "service", Keys.service, "account", key],
+                   input: data.base64EncodedString()).status == 0
+    }
+
+    private func getDataKeychain(forKey key: String) -> Data? {
+        let result = secretTool(["lookup", "service", Keys.service, "account", key])
+        guard result.status == 0 else { return nil }
+        return Data(base64Encoded: result.output.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private func deleteKeychain(forKey key: String) {
+        secretTool(["clear", "service", Keys.service, "account", key])
+    }
+    #else
+
     private func setDataKeychain(_ data: Data, forKey key: String) -> Bool {
         deleteKeychain(forKey: key)
 
@@ -364,4 +407,5 @@ class KeychainHelper {
         ]
         SecItemDelete(query as CFDictionary)
     }
+    #endif
 }

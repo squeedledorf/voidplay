@@ -655,6 +655,9 @@ final class StreamRipper {
         }
     }
 
+    // The interactive ripper (dialogs, activity, alerts) is AppKit-only; the download and
+    // file helpers outside these #if blocks are shared with the Linux headless build.
+    #if os(macOS)
     // MARK: - Entry point
 
     /// Format choices offered in the rip dialog, in display order.
@@ -971,6 +974,8 @@ final class StreamRipper {
         }
     }
 
+    #endif
+
     // MARK: - Staging → destination move
 
     /// Copy a single finished file from local staging directly to a
@@ -1225,6 +1230,7 @@ final class StreamRipper {
         return "scale=trunc(iw/2)*2:trunc(ih/2)*2"
     }
 
+    #if os(macOS)
     private func endActivity() {
         WindowManager.shared.mainWindowController?.hideActivity()
     }
@@ -1305,4 +1311,5 @@ final class StreamRipper {
         alert.alertStyle = .warning
         alert.runModal()
     }
+    #endif
 }

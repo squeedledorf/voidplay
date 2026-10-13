@@ -12,18 +12,112 @@ let vlcKitSearchPath: SwiftSetting = .unsafeFlags(["-F", "Frameworks"])
 // Voidplay: the Linux build. The macOS manifest below is upstream's, untouched.
 let package = Package(
     name: "Voidplay",
+    dependencies: [
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.0"),
+        .package(url: "https://github.com/stephencelis/SQLite.swift.git", .upToNextMinor(from: "0.15.4")),
+        .package(url: "https://github.com/swhitty/FlyingFox.git", from: "0.16.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
+    ],
     targets: [
         // vDSP stand-in so upstream's `import Accelerate` compiles unchanged.
         .target(name: "Accelerate", path: "Sources/Linux/Accelerate"),
+        .systemLibrary(name: "CGdkPixbuf", path: "Sources/Linux/CGdkPixbuf", pkgConfig: "gdk-pixbuf-2.0"),
+        .target(name: "AppKit", dependencies: ["CGdkPixbuf"], path: "Sources/Linux/AppKit"),
+        .systemLibrary(name: "CMpv", path: "Sources/Linux/CMpv", pkgConfig: "mpv"),
+        .systemLibrary(name: "CFFmpeg", path: "Sources/Linux/CFFmpeg", pkgConfig: "libavformat"),
+        .target(name: "AVFoundation", dependencies: ["CFFmpeg"], path: "Sources/Linux/AVFoundation"),
+        .target(name: "CoreAudio", path: "Sources/Linux/CoreAudio"),
+        .target(
+            name: "CryptoKit",
+            dependencies: [.product(name: "Crypto", package: "swift-crypto")],
+            path: "Sources/Linux/CryptoKit"
+        ),
         .target(
             name: "NullPlayerCore",
-            dependencies: ["Accelerate"],
+            // AppKit here is the Linux stand-in; core's `#if canImport(AppKit)` blocks need its colour types.
+            dependencies: ["Accelerate", "AppKit"],
             path: "Sources/NullPlayerCore"
+        ),
+        // Headless player: upstream's portable sources plus Linux replacements in Sources/Linux/Voidplay.
+        .executableTarget(
+            name: "voidplay",
+            dependencies: [
+                "NullPlayerCore", "Accelerate", "AppKit", "CMpv", "AVFoundation", "CoreAudio", "CryptoKit", "ZIPFoundation", "FlyingFox",
+                .product(name: "SQLite", package: "SQLite.swift"),
+            ],
+            path: "Sources",
+            exclude: ["NullPlayer/Resources"],
+            sources: [
+                "Linux/Voidplay",
+                "NullPlayer/CLI",
+                "NullPlayer/Data",
+                "NullPlayer/Plex",
+                "NullPlayer/Jellyfin/JellyfinManager.swift",
+                "NullPlayer/Jellyfin/JellyfinModels.swift",
+                "NullPlayer/Jellyfin/JellyfinPlaybackReporter.swift",
+                "NullPlayer/Jellyfin/JellyfinRadioHistory.swift",
+                "NullPlayer/Jellyfin/JellyfinServerClient.swift",
+                "NullPlayer/Jellyfin/JellyfinVideoPlaybackReporter.swift",
+                "NullPlayer/Emby/EmbyManager.swift",
+                "NullPlayer/Emby/EmbyModels.swift",
+                "NullPlayer/Emby/EmbyPlaybackReporter.swift",
+                "NullPlayer/Emby/EmbyRadioHistory.swift",
+                "NullPlayer/Emby/EmbyServerClient.swift",
+                "NullPlayer/Emby/EmbyVideoPlaybackReporter.swift",
+                "NullPlayer/Subsonic/SubsonicManager.swift",
+                "NullPlayer/Subsonic/SubsonicModels.swift",
+                "NullPlayer/Subsonic/SubsonicPlaybackReporter.swift",
+                "NullPlayer/Subsonic/SubsonicRadioHistory.swift",
+                "NullPlayer/Subsonic/SubsonicServerClient.swift",
+                "NullPlayer/Radio",
+                "NullPlayer/StreamRipper",
+                "NullPlayer/YouTube/YouTubeChannelSearch.swift",
+                "NullPlayer/YouTube/YouTubeChannelUploads.swift",
+                "NullPlayer/YouTube/YouTubeManager.swift",
+                "NullPlayer/YouTube/YouTubeModels.swift",
+                "NullPlayer/YouTube/YouTubeRows.swift",
+                "NullPlayer/App/AppCapabilities.swift",
+                "NullPlayer/App/PlayerUIMode.swift",
+                "NullPlayer/ModernSkin/ModernSkinFamily.swift",
+                "NullPlayer/Windows/Shared/LibraryBrowserTabSort.swift",
+                "NullPlayer/App/AppPersistence.swift",
+                "NullPlayer/App/BundleHelper.swift",
+                "NullPlayer/Audio/AudioFileValidator.swift",
+                "NullPlayer/Audio/PitchTuningController.swift",
+                "NullPlayer/Audio/StreamingTrackResolver.swift",
+                "NullPlayer/Casting/CastDevice.swift",
+                "NullPlayer/Casting/SonosGroupSnapshotPolicy.swift",
+                "NullPlayer/Casting/SonosLocalStopState.swift",
+                "NullPlayer/Casting/SonosVolumeCoalescer.swift",
+                "NullPlayer/Utilities/ArtistAlbumCount.swift",
+                "NullPlayer/Utilities/CueAlbumSplitter.swift",
+                "NullPlayer/Utilities/EnvGatedLog.swift",
+                "NullPlayer/Utilities/KeychainHelper.swift",
+                "NullPlayer/Utilities/LibraryTextSorter.swift",
+                "NullPlayer/Utilities/LocalFileDiscovery.swift",
+                "NullPlayer/Utilities/SearchArtistAlbumMerge.swift",
+                "NullPlayer/Utilities/URL+Redacted.swift",
+            ],
+            resources: [.copy("NullPlayer/Resources")],
+            swiftSettings: [
+                // Darwin's Foundation includes URLSession; on Linux it lives in FoundationNetworking.
+                .unsafeFlags(["-Xfrontend", "-import-module", "-Xfrontend", "FoundationNetworking"]),
+            ]
         ),
         .testTarget(
             name: "NullPlayerCoreTests",
             dependencies: ["NullPlayerCore"],
             path: "Tests/NullPlayerCoreTests"
+        ),
+        .testTarget(
+            name: "AVFoundationTests",
+            dependencies: ["AVFoundation"],
+            path: "Tests/Linux/AVFoundationTests"
+        ),
+        .testTarget(
+            name: "VoidplayTests",
+            dependencies: ["voidplay"],
+            path: "Tests/Linux/VoidplayTests"
         ),
         .testTarget(
             name: "AccelerateTests",

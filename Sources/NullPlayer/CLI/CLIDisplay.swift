@@ -308,6 +308,7 @@ class CLIDisplay {
         let pixelWidth = artWidth
         let pixelHeight = asciiMode ? artWidth / 2 : artWidth
 
+        #if os(macOS)
         // cgImage(forProposedRect:) returns nil in headless processes (no display context).
         // tiffRepresentation rasterizes at native size without needing a screen.
         guard let tiff = image.tiffRepresentation else {
@@ -342,6 +343,12 @@ class CLIDisplay {
 
         context.interpolationQuality = .high
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
+        #else
+        // Linux: NSImage decodes through gdk-pixbuf and hands back the same top-down RGBX bytes.
+        let bytesPerPixel = 4
+        let bytesPerRow = pixelWidth * bytesPerPixel
+        guard let pixelData = image.rgbxPixels(width: pixelWidth, height: pixelHeight) else { return }
+        #endif
 
         // No-color path: map each pixel's luminance to a ramp glyph. Works on any
         // terminal because it carries the image in the characters themselves, not
