@@ -27,7 +27,10 @@ final class PipeWireCapture {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tool)
         process.arguments = ["--target", serial, "--format", "f32", "--rate", "\(Int(Self.sampleRate))",
-                             "--channels", "2", "--latency", "20ms", "--raw", "-"]
+                             "--channels", "2", "--latency", "20ms", "--raw",
+                             // Only ever our own stream: never fall back to another source (a mic)
+                             // or follow it elsewhere when it goes away.
+                             "-P", "{ node.dont-fallback = true node.dont-reconnect = true node.passive = true }", "-"]
         let output = Pipe()
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
