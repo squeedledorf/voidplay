@@ -34,10 +34,23 @@ let package = Package(
         .systemLibrary(name: "CGdkPixbuf", path: "Sources/Linux/CGdkPixbuf", pkgConfig: "gdk-pixbuf-2.0"),
         .systemLibrary(name: "CGtk", path: "Sources/Linux/CGtk", pkgConfig: "gtk4"),
         .systemLibrary(name: "CX11", path: "Sources/Linux/CX11", pkgConfig: "gtk4-x11"),
-        .target(name: "AppKit", dependencies: ["CGdkPixbuf", "CGtk", "CX11", "CoreGraphics"], path: "Sources/Linux/AppKit"),
+        .target(name: "AppKit", dependencies: ["CGdkPixbuf", "CGtk", "CX11", "CoreGraphics", "QuartzCore", "UniformTypeIdentifiers"],
+                path: "Sources/Linux/AppKit"),
         .systemLibrary(name: "CMpv", path: "Sources/Linux/CMpv", pkgConfig: "mpv"),
         .systemLibrary(name: "CFFmpeg", path: "Sources/Linux/CFFmpeg", pkgConfig: "libavformat"),
         .target(name: "AVFoundation", dependencies: ["CFFmpeg"], path: "Sources/Linux/AVFoundation"),
+        .target(name: "QuartzCore", dependencies: ["CoreGraphics"], path: "Sources/Linux/QuartzCore"),
+        .target(name: "CoreImage", dependencies: ["CoreGraphics"], path: "Sources/Linux/CoreImage"),
+        .target(name: "UniformTypeIdentifiers", path: "Sources/Linux/UniformTypeIdentifiers"),
+        .target(name: "os", path: "Sources/Linux/os"),
+        .target(name: "Metal", path: "Sources/Linux/Metal"),
+        .target(name: "MetalKit", dependencies: ["Metal"], path: "Sources/Linux/MetalKit"),
+        .target(
+            name: "CVisClassicCore",
+            path: "Sources/CVisClassicCore",
+            publicHeadersPath: "include",
+            cxxSettings: [.headerSearchPath(".")]
+        ),
         .target(name: "CoreAudio", path: "Sources/Linux/CoreAudio"),
         .target(
             name: "CryptoKit",
@@ -54,7 +67,7 @@ let package = Package(
         .executableTarget(
             name: "voidplay",
             dependencies: [
-                "NullPlayerCore", "Accelerate", "AppKit", "CMpv", "AVFoundation", "CoreAudio", "CryptoKit", "ZIPFoundation", "FlyingFox",
+                "NullPlayerCore", "Accelerate", "AppKit", "CMpv", "QuartzCore", "CoreImage", "UniformTypeIdentifiers", "os", "Metal", "MetalKit", "CVisClassicCore", "AVFoundation", "CoreAudio", "CryptoKit", "ZIPFoundation", "FlyingFox",
                 .product(name: "SQLite", package: "SQLite.swift"),
             ],
             path: "Sources",
@@ -100,7 +113,8 @@ let package = Package(
             path: "Tests/Linux/AccelerateTests"
         ),
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageModes: [.v5],
+    cxxLanguageStandard: .cxx17
 )
 #else
 let package = Package(

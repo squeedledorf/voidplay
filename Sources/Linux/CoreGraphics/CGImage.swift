@@ -181,3 +181,18 @@ public final class CGImage: @unchecked Sendable {
         return CGDataProvider(data: Data(bytes: base, count: bytesPerRow * height))
     }
 }
+
+extension CGImage {
+    /// PNG encoding of the image (Cairo's writer).
+    public func pngData() -> Data? {
+        var data = Data()
+        let status = withUnsafeMutablePointer(to: &data) { pointer -> cairo_status_t in
+            cairo_surface_write_to_png_stream(_surface, { closure, bytes, length in
+                guard let closure, let bytes else { return CAIRO_STATUS_WRITE_ERROR }
+                closure.assumingMemoryBound(to: Data.self).pointee.append(bytes, count: Int(length))
+                return CAIRO_STATUS_SUCCESS
+            }, pointer)
+        }
+        return status == CAIRO_STATUS_SUCCESS ? data : nil
+    }
+}

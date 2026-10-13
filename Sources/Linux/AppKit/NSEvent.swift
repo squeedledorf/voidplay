@@ -81,7 +81,7 @@ open class NSEvent {
     /// Mouse buttons held right now, as a bit set (bit 0 = left).
     public internal(set) static var pressedMouseButtons = 0
     /// Pointer position in screen coordinates (bottom-left origin).
-    public static var mouseLocation: NSPoint { WindowPlacement.shared.pointerLocation() ?? lastMouseLocation }
+    @preconcurrency @MainActor public static var mouseLocation: NSPoint { WindowPlacement.shared.pointerLocation() ?? lastMouseLocation }
     static var lastMouseLocation = NSPoint.zero
 
     public static var doubleClickInterval: TimeInterval { 0.4 }
@@ -136,10 +136,11 @@ open class NSEvent {
     }
 }
 
-open class NSResponder {
+@preconcurrency @MainActor
+open class NSResponder: NSObject {
     open weak var nextResponder: NSResponder?
 
-    public init() {}
+    public override init() { super.init() }
 
     open var acceptsFirstResponder: Bool { false }
     open func becomeFirstResponder() -> Bool { true }
@@ -162,6 +163,14 @@ open class NSResponder {
     open func keyUp(with event: NSEvent) { nextResponder?.keyUp(with: event) }
     open func flagsChanged(with event: NSEvent) { nextResponder?.flagsChanged(with: event) }
     open func cursorUpdate(with event: NSEvent) {}
+
+    // Standard actions sent down the responder chain.
+    open func selectAll(_ sender: Any?) {}
+    open func copy(_ sender: Any?) {}
+    open func paste(_ sender: Any?) {}
+    open func cut(_ sender: Any?) {}
+    open func delete(_ sender: Any?) {}
+    open func cancelOperation(_ sender: Any?) {}
 }
 
 /// Region of a view that reports enter/exit/move and cursor updates.

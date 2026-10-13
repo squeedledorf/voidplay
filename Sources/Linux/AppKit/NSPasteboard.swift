@@ -28,7 +28,7 @@ open class NSPasteboard {
 
     public var types: [PasteboardType]? { Array(strings.keys) + (urls.isEmpty ? [] : [.fileURL]) }
 
-    open func readObjects(forClasses classes: [AnyClass], options: [ReadingOptionKey: Any]?) -> [Any]? {
+    open func readObjects(forClasses classes: [AnyClass], options: [ReadingOptionKey: Any]? = nil) -> [Any]? {
         urls.isEmpty ? nil : urls.map { $0 as NSURL }
     }
 

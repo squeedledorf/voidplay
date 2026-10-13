@@ -1,4 +1,5 @@
 #include <gtk/gtk.h>
+#include <pango/pangocairo.h>
 
 // Function-like macros Swift cannot import.
 static inline gulong cgtk_signal_connect(gpointer instance, const gchar *signal, GCallback handler, gpointer data) {

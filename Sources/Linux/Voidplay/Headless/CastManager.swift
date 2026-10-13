@@ -9,6 +9,8 @@ final class CastManager {
     static let shared = CastManager()
     static weak var cliAudioEngine: AudioEngine?
     static let sessionDidChangeNotification = Notification.Name("CastSessionDidChange")
+    static let playbackStateDidChangeNotification = Notification.Name("CastPlaybackStateDidChange")
+    static let trackChangeLoadingNotification = Notification.Name("CastTrackChangeLoading")
 
     struct Unavailable: LocalizedError {
         var errorDescription: String? { "Casting is not available in the Linux build yet." }

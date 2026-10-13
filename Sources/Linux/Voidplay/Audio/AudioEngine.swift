@@ -198,6 +198,85 @@ class AudioEngine {
         }
     }
 
+    // MARK: Playlist editing (upstream's semantics)
+
+    func clearPlaylist() {
+        stop()
+        playlist.removeAll()
+        currentIndex = -1
+        currentTrack = nil
+        shuffle.clear()
+        PlexPlaybackReporter.shared.stopTracking()
+        SubsonicPlaybackReporter.shared.trackStopped()
+        JellyfinPlaybackReporter.shared.trackStopped()
+        EmbyPlaybackReporter.shared.trackStopped()
+        delegate?.audioEngineDidChangePlaylist()
+    }
+
+    func removeTrack(at index: Int) {
+        guard playlist.indices.contains(index) else { return }
+        playlist.remove(at: index)
+        if index == currentIndex {
+            stop()
+            currentTrack = nil
+            currentIndex = playlist.isEmpty ? -1 : min(index, playlist.count - 1)
+            if currentIndex >= 0 { currentTrack = playlist[currentIndex] }
+        } else if index < currentIndex {
+            currentIndex -= 1
+        }
+        playlistDidMutate()
+    }
+
+    func moveTrack(from source: Int, to destination: Int) {
+        guard playlist.indices.contains(source), playlist.indices.contains(destination) else { return }
+        playlist.insert(playlist.remove(at: source), at: destination)
+        if source == currentIndex { currentIndex = destination }
+        else if source < currentIndex && destination >= currentIndex { currentIndex -= 1 }
+        else if source > currentIndex && destination <= currentIndex { currentIndex += 1 }
+        playlistDidMutate()
+    }
+
+    enum SortCriteria { case title, filename, path, duration, artist, album }
+
+    func sortPlaylist(by criteria: SortCriteria, ascending: Bool = true) {
+        reorderKeepingCurrent { tracks in
+            tracks.sort { a, b in
+                let order: ComparisonResult
+                switch criteria {
+                case .title: order = a.displayTitle.localizedCaseInsensitiveCompare(b.displayTitle)
+                case .filename: order = a.url.lastPathComponent.localizedCaseInsensitiveCompare(b.url.lastPathComponent)
+                case .path: order = a.url.path.localizedCaseInsensitiveCompare(b.url.path)
+                case .duration:
+                    let x = a.duration ?? 0, y = b.duration ?? 0
+                    order = x < y ? .orderedAscending : x > y ? .orderedDescending : .orderedSame
+                case .artist: order = (a.artist ?? "").localizedCaseInsensitiveCompare(b.artist ?? "")
+                case .album: order = (a.album ?? "").localizedCaseInsensitiveCompare(b.album ?? "")
+                }
+                return ascending ? order == .orderedAscending : order == .orderedDescending
+            }
+        }
+    }
+
+    func shufflePlaylist() { reorderKeepingCurrent { $0.shuffle() } }
+    func reversePlaylist() { reorderKeepingCurrent { $0.reverse() } }
+
+    /// Reorders the queue and keeps pointing at the same current track (found by URL, as upstream).
+    private func reorderKeepingCurrent(_ reorder: (inout [Track]) -> Void) {
+        let currentURL = playlist.indices.contains(currentIndex) ? playlist[currentIndex].url : nil
+        reorder(&playlist)
+        if let currentURL { currentIndex = playlist.firstIndex { $0.url == currentURL } ?? -1 }
+        playlistDidMutate()
+    }
+
+    /// -1 left … 1 right. Not persisted, as upstream.
+    var balance: Float = 0 {
+        didSet {
+            balance = max(-1, min(1, balance))
+            applyAudioFilters()
+            notifyPlaybackOptionsChanged()
+        }
+    }
+
     private func playlistDidMutate() {
         if shuffleEnabled { shuffle.rebuild(count: playlist.count, anchoredAt: currentIndex) }
         replaceQueuedNext()
@@ -546,6 +625,11 @@ class AudioEngine {
                 filters.append("lavfi=[\(kind)=f=\(setting.frequency):t=o:w=\(setting.bandwidth):g=\(gain)]")
             }
         }
+        if balance != 0 {
+            // Equal-power-free linear pan, as AVAudioPlayerNode.pan: the far side fades out.
+            let left = balance > 0 ? 1 - Double(balance) : 1, right = balance < 0 ? 1 + Double(balance) : 1
+            filters.append("lavfi=[pan=stereo|c0=\(left)*c0|c1=\(right)*c1]")
+        }
         mpv.set("af", filters.joined(separator: ","))
         mpv.set("speed", Double(tuningController.rate))
     }
@@ -559,6 +643,21 @@ class AudioEngine {
     }
 
     var mpvAudioDevices: [[String: Any]] { mpv.node("audio-device-list") as? [[String: Any]] ?? [] }
+
+    // MARK: Analysis consumers
+    // ponytail: counted only; PCM/spectrum taps (from a PipeWire monitor of mpv's stream) arrive
+    // with the visualizer stage, and these counts will gate that capture.
+
+    private var fullStereoConsumers: [String: Int] = [:]
+
+    func addFullStereoConsumer(_ id: String) { fullStereoConsumers[id, default: 0] += 1 }
+
+    func removeFullStereoConsumer(_ id: String) {
+        guard let count = fullStereoConsumers[id] else { return }
+        fullStereoConsumers[id] = count > 1 ? count - 1 : nil
+    }
+
+    var fullStereoNeeded: Bool { !fullStereoConsumers.isEmpty }
 
     // MARK: Casting (not on Linux yet)
 

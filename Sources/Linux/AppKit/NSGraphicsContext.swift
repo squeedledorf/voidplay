@@ -24,6 +24,15 @@ open class NSGraphicsContext {
         self.isFlipped = flipped
     }
 
+    /// Draws into `rep`'s bitmap, in points (scaled to the rep's pixels), unflipped.
+    public convenience init?(bitmapImageRep rep: NSBitmapImageRep) {
+        guard let ctx = rep.bitmapContext else { return nil }
+        if rep.size.width > 0, rep.size.height > 0 {
+            ctx.scaleBy(x: CGFloat(rep.pixelsWide) / rep.size.width, y: CGFloat(rep.pixelsHigh) / rep.size.height)
+        }
+        self.init(cgContext: ctx, flipped: false)
+    }
+
     public static var current: NSGraphicsContext?
     private static var stack: [NSGraphicsContext?] = []
 

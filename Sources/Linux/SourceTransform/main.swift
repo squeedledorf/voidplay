@@ -9,7 +9,7 @@ import Foundation
 // items, notification observers and timers can call them by name.
 // Edits never add or remove lines, so `#sourceLocation` keeps diagnostics on upstream lines.
 //
-// Usage: source-transform transform <input.swift> <output.swift> <id>
+// Usage: source-transform transform <input.swift> <output.swift> <id> [first-last]
 //        source-transform registry <output.swift> <id>...
 
 struct ObjCMethod {
@@ -324,13 +324,30 @@ func registrationCode(id: String, methods: [ObjCMethod]) -> String {
 
 let args = CommandLine.arguments
 switch args.count > 1 ? args[1] : "" {
-case "transform" where args.count == 5:
+case "transform" where args.count == 5 || args.count == 6:
     let input = URL(fileURLWithPath: args[2])
-    let text = try String(contentsOf: input, encoding: .utf8)
+    var text = try String(contentsOf: input, encoding: .utf8)
+    // Optional "first-last" line range: compile only that slice of a large upstream file.
+    var firstLine = 1
+    var imports: [String] = []
+    if args.count == 6 {
+        let bounds = args[5].split(separator: "-").compactMap { Int($0) }
+        guard bounds.count == 2, bounds[0] >= 1, bounds[1] >= bounds[0] else {
+            FileHandle.standardError.write(Data("bad line range \(args[5])\n".utf8)); exit(2)
+        }
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        imports = lines.filter { $0.hasPrefix("import ") }.map(String.init)
+        text = lines[(bounds[0] - 1)..<min(bounds[1], lines.count)].joined(separator: "\n")
+        firstLine = bounds[0]
+    }
+    // Apple submodule imports (`import os.lock`) name a Swift stand-in module here.
+    text = text.replacingOccurrences(of: "import os.lock", with: "import os     ")
     let transformer = Transformer(text)
     var body = transformer.run()
     if !body.hasSuffix("\n") { body += "\n" }
-    let header = "#sourceLocation(file: \"\(input.path)\", line: 1)\n"
+    // A slice keeps its file's imports (which may sit outside the slice).
+    let header = (firstLine > 1 ? imports.joined(separator: "\n") + "\n" : "")
+        + "#sourceLocation(file: \"\(input.path)\", line: \(firstLine))\n"
     try (header + body + registrationCode(id: args[4], methods: transformer.methods))
         .write(to: URL(fileURLWithPath: args[3]), atomically: true, encoding: .utf8)
 case "registry" where args.count >= 3:

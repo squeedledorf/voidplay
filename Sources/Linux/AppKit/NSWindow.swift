@@ -57,6 +57,7 @@ open class NSWindow: NSResponder {
         public static let utilityWindow = StyleMask(rawValue: 1 << 4)
         public static let fullSizeContentView = StyleMask(rawValue: 1 << 15)
         public static let nonactivatingPanel = StyleMask(rawValue: 1 << 7)
+        public static let fullScreen = StyleMask(rawValue: 1 << 14)
     }
 
     public enum BackingStoreType: UInt, Sendable { case retained, nonretained, buffered }
@@ -109,6 +110,14 @@ open class NSWindow: NSResponder {
     public static let didChangeOcclusionStateNotification = Notification.Name("NSWindowDidChangeOcclusionStateNotification")
     public static let didChangeBackingPropertiesNotification = Notification.Name("NSWindowDidChangeBackingPropertiesNotification")
     public static let didChangeScreenNotification = Notification.Name("NSWindowDidChangeScreenNotification")
+    public static let willStartLiveResizeNotification = Notification.Name("NSWindowWillStartLiveResizeNotification")
+    public static let didEndLiveResizeNotification = Notification.Name("NSWindowDidEndLiveResizeNotification")
+    public static let willEnterFullScreenNotification = Notification.Name("NSWindowWillEnterFullScreenNotification")
+    public static let didEnterFullScreenNotification = Notification.Name("NSWindowDidEnterFullScreenNotification")
+    public static let willExitFullScreenNotification = Notification.Name("NSWindowWillExitFullScreenNotification")
+    public static let didExitFullScreenNotification = Notification.Name("NSWindowDidExitFullScreenNotification")
+    public static let willMiniaturizeNotification = Notification.Name("NSWindowWillMiniaturizeNotification")
+    public static let willMoveNotification = Notification.Name("NSWindowWillMoveNotification")
 
     // MARK: GTK objects
 
@@ -180,7 +189,7 @@ open class NSWindow: NSResponder {
     var gtkWindowPtr: UnsafeMutablePointer<GtkWindow> { cgtk_window(gtkWindow) }
 
     private static var nextToken = 0
-    static var all: [NSWindow] = []
+    nonisolated(unsafe) static var all: [NSWindow] = []
 
     // MARK: Creation
 
@@ -358,6 +367,31 @@ open class NSWindow: NSResponder {
         NotificationCenter.default.post(note)
     }
 
+    // MARK: Full screen
+
+    open func toggleFullScreen(_ sender: Any?) {
+        let entering = !styleMask.contains(.fullScreen)
+        let center = NotificationCenter.default
+        center.post(name: entering ? Self.willEnterFullScreenNotification : Self.willExitFullScreenNotification, object: self)
+        if entering {
+            styleMask.insert(.fullScreen)
+            gtk_window_fullscreen(gtkWindowPtr)
+        } else {
+            styleMask.remove(.fullScreen)
+            gtk_window_unfullscreen(gtkWindowPtr)
+        }
+        center.post(name: entering ? Self.didEnterFullScreenNotification : Self.didExitFullScreenNotification, object: self)
+    }
+
+    // MARK: Accessibility (no AT-SPI bridge yet; values are kept for code that reads them back)
+
+    private var axIdentifier = ""
+    private var axLabel: String?
+    open func setAccessibilityIdentifier(_ identifier: String?) { axIdentifier = identifier ?? "" }
+    open func accessibilityIdentifier() -> String { axIdentifier }
+    open func setAccessibilityLabel(_ label: String?) { axLabel = label }
+    open func accessibilityLabel() -> String? { axLabel }
+
     open func invalidateShadow() {}
     open func display() { viewNeedsDisplay() }
     open func displayIfNeeded() {}
@@ -425,10 +459,48 @@ open class NSWindow: NSResponder {
 
     func windowWasMovedByApp() { if pressedButton != 0 { movedSincePress = true } }
 
-    private func dispatch(_ event: NSEvent, _ deliver: (NSResponder) -> Void) {
+    // GTK input → NSEvent → local monitors → sendEvent, as AppKit's application object does.
+
+    private func post(_ event: NSEvent) {
         guard let event = NSEvent.filter(event) else { return }
-        _ = event
-        if let target = mouseTarget { deliver(target) }
+        sendEvent(event)
+    }
+
+    /// Routes an event: mouse-down to the view under it (which keeps the drag and the mouse-up),
+    /// moves to tracking areas, wheel to the view under the pointer, keys to the first responder.
+    open func sendEvent(_ event: NSEvent) {
+        switch event.type {
+        case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+            guard !ignoresMouseEvents, let root = contentView else { return }
+            mouseTarget = root.hitTest(event.locationInWindow) ?? root
+            if let view = mouseTarget, view.acceptsFirstResponder, firstResponder !== view { _ = makeFirstResponder(view) }
+            switch event.type {
+            case .leftMouseDown: mouseTarget?.mouseDown(with: event)
+            case .rightMouseDown: mouseTarget?.rightMouseDown(with: event)
+            default: mouseTarget?.otherMouseDown(with: event)
+            }
+        case .leftMouseDragged: mouseTarget?.mouseDragged(with: event)
+        case .rightMouseDragged: mouseTarget?.rightMouseDragged(with: event)
+        case .otherMouseDragged: mouseTarget?.otherMouseDragged(with: event)
+        case .leftMouseUp, .rightMouseUp, .otherMouseUp:
+            let target = mouseTarget
+            mouseTarget = nil
+            switch event.type {
+            case .leftMouseUp: target?.mouseUp(with: event)
+            case .rightMouseUp: target?.rightMouseUp(with: event)
+            default: target?.otherMouseUp(with: event)
+            }
+        case .mouseMoved, .mouseEntered, .mouseExited:
+            updateTracking(at: event.locationInWindow, flags: event.modifierFlags, leaving: event.type == .mouseExited)
+        case .scrollWheel:
+            contentView?.hitTest(event.locationInWindow)?.scrollWheel(with: event)
+        case .keyDown:
+            (firstResponder ?? contentView)?.keyDown(with: event)
+        case .keyUp:
+            (firstResponder ?? contentView)?.keyUp(with: event)
+        case .flagsChanged:
+            (firstResponder ?? contentView)?.flagsChanged(with: event)
+        }
     }
 
     fileprivate func pressed(button: Int, count: Int, x: Double, y: Double, state: GdkModifierType) {
@@ -437,35 +509,18 @@ open class NSWindow: NSResponder {
         NSEvent.pressedMouseButtons |= 1 << (button - 1)
         let flags = NSEvent.ModifierFlags(gdk: state)
         NSEvent.modifierFlags = flags
-        let point = location(x: x, y: y)
-        guard !ignoresMouseEvents, let root = contentView else { return }
-        mouseTarget = root.hitTest(point) ?? root
-        if let view = mouseTarget, view.acceptsFirstResponder, firstResponder !== view { _ = makeFirstResponder(view) }
         let type: NSEvent.EventType = button == 1 ? .leftMouseDown : button == 3 ? .rightMouseDown : .otherMouseDown
-        guard let event = NSEvent.filter(NSEvent(type: type, location: point, modifierFlags: flags, window: self,
-                                                 clickCount: count, buttonNumber: button - 1)) else { return }
-        switch button {
-        case 1: mouseTarget?.mouseDown(with: event)
-        case 3: mouseTarget?.rightMouseDown(with: event)
-        default: mouseTarget?.otherMouseDown(with: event)
-        }
+        post(NSEvent(type: type, location: location(x: x, y: y), modifierFlags: flags, window: self,
+                     clickCount: count, buttonNumber: button - 1))
     }
 
     fileprivate func released(button: Int, x: Double, y: Double, state: GdkModifierType) {
-        let flags = NSEvent.ModifierFlags(gdk: state)
         let point = location(x: x, y: y)
-        let type: NSEvent.EventType = button == 1 ? .leftMouseUp : button == 3 ? .rightMouseUp : .otherMouseUp
-        let target = mouseTarget
-        mouseTarget = nil
         pressedButton = 0
         NSEvent.pressedMouseButtons &= ~(1 << (button - 1))
-        guard let event = NSEvent.filter(NSEvent(type: type, location: point, modifierFlags: flags, window: self,
-                                                 clickCount: 1, buttonNumber: button - 1)) else { return }
-        switch button {
-        case 1: target?.mouseUp(with: event)
-        case 3: target?.rightMouseUp(with: event)
-        default: target?.otherMouseUp(with: event)
-        }
+        let type: NSEvent.EventType = button == 1 ? .leftMouseUp : button == 3 ? .rightMouseUp : .otherMouseUp
+        post(NSEvent(type: type, location: point, modifierFlags: NSEvent.ModifierFlags(gdk: state), window: self,
+                     clickCount: 1, buttonNumber: button - 1))
     }
 
     fileprivate func motion(x: Double, y: Double, state: GdkModifierType) {
@@ -473,22 +528,18 @@ open class NSWindow: NSResponder {
         NSEvent.modifierFlags = flags
         let point = location(x: x, y: y)
         NSEvent.lastMouseLocation = convertPoint(toScreen: point)
-        if pressedButton != 0, let target = mouseTarget {
+        if pressedButton != 0 {
             let type: NSEvent.EventType = pressedButton == 1 ? .leftMouseDragged
                 : pressedButton == 3 ? .rightMouseDragged : .otherMouseDragged
-            guard let event = NSEvent.filter(NSEvent(type: type, location: point, modifierFlags: flags, window: self,
-                                                     buttonNumber: pressedButton - 1)) else { return }
-            switch pressedButton {
-            case 1: target.mouseDragged(with: event)
-            case 3: target.rightMouseDragged(with: event)
-            default: target.otherMouseDragged(with: event)
-            }
-            return
+            post(NSEvent(type: type, location: point, modifierFlags: flags, window: self, buttonNumber: pressedButton - 1))
+        } else {
+            post(NSEvent(type: .mouseMoved, location: point, modifierFlags: flags, window: self))
         }
-        updateTracking(at: point, flags: flags, leaving: false)
     }
 
-    fileprivate func left() { updateTracking(at: lastLocal, flags: NSEvent.modifierFlags, leaving: true) }
+    fileprivate func left() {
+        post(NSEvent(type: .mouseExited, location: lastLocal, modifierFlags: NSEvent.modifierFlags, window: self))
+    }
 
     /// Enter/exit/move delivery for every tracking area in the tree.
     private func updateTracking(at point: NSPoint, flags: NSEvent.ModifierFlags, leaving: Bool) {
@@ -521,14 +572,10 @@ open class NSWindow: NSResponder {
     }
 
     fileprivate func scrolled(dx: Double, dy: Double, precise: Bool) -> Bool {
-        guard let root = contentView, let target = root.hitTest(lastLocal) else { return false }
         // AppKit: positive deltaY scrolls content down (wheel away from the user); GTK is the reverse.
         let scale: Double = precise ? 1 : 10
-        guard let event = NSEvent.filter(NSEvent(type: .scrollWheel, location: lastLocal,
-                                                 modifierFlags: NSEvent.modifierFlags, window: self,
-                                                 scrollingDeltaX: CGFloat(-dx * scale), scrollingDeltaY: CGFloat(-dy * scale),
-                                                 precise: precise)) else { return true }
-        target.scrollWheel(with: event)
+        post(NSEvent(type: .scrollWheel, location: lastLocal, modifierFlags: NSEvent.modifierFlags, window: self,
+                     scrollingDeltaX: CGFloat(-dx * scale), scrollingDeltaY: CGFloat(-dy * scale), precise: precise))
         return true
     }
 
@@ -538,14 +585,11 @@ open class NSWindow: NSResponder {
         let unicode = gdk_keyval_to_unicode(gdk_keyval_to_lower(keyval))
         let raw = gdk_keyval_to_unicode(keyval)
         func text(_ u: guint32) -> String? { u == 0 ? nil : Unicode.Scalar(u).map { String(Character($0)) } }
-        let event = NSEvent(type: down ? .keyDown : .keyUp, location: lastLocal, modifierFlags: flags, window: self,
-                            keyCode: KeyCodes.macKeyCode(for: keyval),
-                            characters: text(raw) ?? KeyCodes.functionCharacter(for: keyval),
-                            charactersIgnoringModifiers: text(unicode) ?? KeyCodes.functionCharacter(for: keyval))
-        guard let filtered = NSEvent.filter(event) else { return true }
-        let responder = firstResponder ?? contentView
-        if down { responder?.keyDown(with: filtered) } else { responder?.keyUp(with: filtered) }
-        return responder != nil
+        post(NSEvent(type: down ? .keyDown : .keyUp, location: lastLocal, modifierFlags: flags, window: self,
+                     keyCode: KeyCodes.macKeyCode(for: keyval),
+                     characters: text(raw) ?? KeyCodes.functionCharacter(for: keyval),
+                     charactersIgnoringModifiers: text(unicode) ?? KeyCodes.functionCharacter(for: keyval)))
+        return firstResponder != nil || contentView != nil
     }
 
     fileprivate func activeChanged() {

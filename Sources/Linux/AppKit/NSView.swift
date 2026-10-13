@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import QuartzCore
 
 /// A rectangle of a window that draws through Core Graphics and receives events. The hosting
 /// NSWindow composites the view tree into one GTK drawing area.
@@ -44,7 +45,22 @@ open class NSView: NSResponder {
     open var alphaValue: CGFloat = 1 { didSet { needsDisplay = true } }
     open var autoresizingMask: AutoresizingMask = []
     open var autoresizesSubviews = true
-    open var wantsLayer = false
+    open var wantsLayer = false {
+        didSet { if wantsLayer, layer == nil { layer = makeBackingLayer() } }
+    }
+    /// Backing layer; its sublayers are composited above this view's own drawing.
+    open var layer: CALayer? {
+        didSet { layer?.bounds = bounds }
+    }
+    open func makeBackingLayer() -> CALayer {
+        let layer = CALayer()
+        layer.bounds = bounds
+        layer.anchorPoint = .zero
+        return layer
+    }
+    public enum LayerContentsRedrawPolicy: Int, Sendable { case never, onSetNeedsDisplay, duringViewResize, beforeViewResize, crossfade }
+    open var layerContentsRedrawPolicy: LayerContentsRedrawPolicy = .duringViewResize
+    open var canDrawSubviewsIntoLayer = false
     open var toolTip: String?
     open var identifier: NSUserInterfaceItemIdentifier?
     open var tag: Int { -1 }
@@ -171,9 +187,17 @@ open class NSView: NSResponder {
         if alphaValue < 1 { ctx.beginTransparencyLayer(auxiliaryInfo: nil) }
         let previous = NSGraphicsContext.current
         NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: isFlipped)
+        if let background = layer?.backgroundColor {
+            ctx.saveGState(); ctx.setFillColor(background); ctx.fill(bounds); ctx.restoreGState()
+        }
         draw(bounds)
         NSGraphicsContext.current = previous
         needsDisplay = false
+        if let layer {
+            layer.bounds = bounds
+            for sublayer in layer.sublayers ?? [] { sublayer.render(in: ctx) }
+            if layer.hasRunningAnimations { window?.viewNeedsDisplay() }
+        }
         for view in subviews { view.drawTree(in: ctx, dirty: dirty) }
         if alphaValue < 1 { ctx.setAlpha(alphaValue); ctx.endTransparencyLayer() }
         ctx.restoreGState()

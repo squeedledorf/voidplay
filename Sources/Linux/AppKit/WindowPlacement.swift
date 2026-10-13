@@ -4,6 +4,7 @@ import CX11
 
 /// Puts windows where AppKit code asks. Wayland gives clients no say over placement, so each
 /// desktop needs its own route; the base class lets the compositor decide (no docking/snapping).
+@preconcurrency @MainActor
 class WindowPlacement {
     static let shared: WindowPlacement = {
         let env = ProcessInfo.processInfo.environment
@@ -28,7 +29,7 @@ class WindowPlacement {
 // MARK: - Hyprland
 
 /// Hyprland's request socket: one request per connection, reply until EOF.
-final class HyprlandIPC {
+final class HyprlandIPC: Sendable {
     let path: String
 
     init?() {

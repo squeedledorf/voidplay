@@ -2,6 +2,7 @@ import Foundation
 
 /// Menu model. Items carry title, state, key equivalent and a target/action pair (or a
 /// submenu); `NSMenu.popUpContextMenu` presents it with GTK.
+@preconcurrency @MainActor
 open class NSMenu {
     open var title: String
     public private(set) var items: [NSMenuItem] = []
@@ -65,6 +66,7 @@ extension NSMenuDelegate {
     public func menuDidClose(_ menu: NSMenu) {}
 }
 
+@preconcurrency @MainActor
 open class NSMenuItem {
     public enum State: Int, Sendable { case off = 0, on = 1, mixed = -1 }
     public typealias ControlState = State

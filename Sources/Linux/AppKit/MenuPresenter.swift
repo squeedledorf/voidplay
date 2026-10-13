@@ -2,6 +2,7 @@ import Foundation
 import CGtk
 
 /// Shows an NSMenu as a GtkPopoverMenu anchored at a point in a window.
+@preconcurrency @MainActor
 enum MenuPresenter {
     private final class Presentation {
         var items: [NSMenuItem] = []

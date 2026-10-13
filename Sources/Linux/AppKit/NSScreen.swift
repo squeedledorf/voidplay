@@ -2,6 +2,7 @@ import Foundation
 import CGtk
 
 /// A monitor, in AppKit's global space: the primary screen's bottom-left corner is (0, 0), y up.
+@preconcurrency @MainActor
 open class NSScreen {
     public let frame: NSRect
     public let visibleFrame: NSRect

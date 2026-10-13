@@ -13,6 +13,7 @@ extension NSApplicationDelegate {
 
 /// The application object over GTK: `run()` starts GTK and GLib's main loop (with Foundation's
 /// run loop folded in) and tells the delegate it launched.
+@preconcurrency @MainActor
 open class NSApplication {
     public static let shared = NSApplication()
 
@@ -38,6 +39,9 @@ open class NSApplication {
 
     open func run() {
         gtk_init()
+        // gtk_init adopts the environment's locale; libmpv (and number parsing in skins) needs
+        // LC_NUMERIC "C", or a locale with decimal commas breaks both.
+        setlocale(LC_NUMERIC, "C")
         MainLoop.install()
         isRunning = true
         let launched = Notification(name: Self.didFinishLaunchingNotification, object: self)

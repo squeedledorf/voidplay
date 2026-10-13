@@ -2,6 +2,7 @@ import Foundation
 import CGtk
 
 /// Pointer shape, applied to the window under the pointer by CSS cursor name.
+@preconcurrency @MainActor
 open class NSCursor {
     let name: String
 

@@ -49,3 +49,31 @@ Sources/NullPlayer/Utilities/LibraryTextSorter.swift
 Sources/NullPlayer/Utilities/LocalFileDiscovery.swift
 Sources/NullPlayer/Utilities/SearchArtistAlbumMerge.swift
 Sources/NullPlayer/Utilities/URL+Redacted.swift
+# Classic (.wsz) skin engine and its windows
+Sources/NullPlayer/Skin
+Sources/NullPlayer/Utilities/BMPParser.swift
+Sources/NullPlayer/Windows/MainWindow
+Sources/NullPlayer/Windows/Playlist
+Sources/NullPlayer/Windows/Equalizer
+# Shared declarations at the head of WindowManager.swift (the class itself is Linux's own for now)
+Sources/NullPlayer/App/WindowManager.swift#L1-23
+Sources/NullPlayer/App/WindowManager.swift#L40-211
+Sources/NullPlayer/App/WindowManager.swift#L234-250
+Sources/NullPlayer/App/MainWindowProviding.swift#L1-128
+Sources/NullPlayer/App/PlaylistWindowProviding.swift
+Sources/NullPlayer/App/EQWindowProviding.swift
+Sources/NullPlayer/App/TimeDisplayFormatter.swift
+Sources/NullPlayer/App/Skinning
+Sources/NullPlayer/Windows/ResizableWindow.swift
+Sources/NullPlayer/Cava
+Sources/NullPlayer/Visualization/VisClassicBridge.swift
+# Visualization settings enums (the Metal view below them comes with the GPU stage)
+Sources/NullPlayer/Visualization/SpectrumAnalyzerView.swift#L1-341
+Sources/NullPlayer/App/ModeDependentWindow.swift#L1-36
+Sources/NullPlayer/Windows/WinampModern/WinampModernHostedWindowSurface.swift
+Sources/NullPlayer/Windows/WinampModern/WinampModernHostedWindowDrag.swift
+# SkinnedSurfaceFrameArtwork.scaled(to:)
+Sources/NullPlayer/Windows/WMPSkin/WMPHostedFrameProvider.swift#L810-827
+Sources/NullPlayer/App/PlaylistMenuBuilder.swift
+Sources/NullPlayer/WinampModern/WasabiPalette.swift
+Sources/NullPlayer/WinampModern/WinampModernSurfaceStyle.swift

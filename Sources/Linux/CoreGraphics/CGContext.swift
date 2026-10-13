@@ -319,6 +319,11 @@ public final class CGContext: @unchecked Sendable {
 
     public func addPath(_ path: CGPath) { path.replay(on: _cr) }
 
+    /// Cairo cannot turn a stroke outline into a path, so the path becomes empty: a following
+    /// clip() hides everything and the stroke-shaped effect (a hairline highlight) is skipped.
+    /// ponytail: draw such highlights by stroking with a gradient source if a skin needs them.
+    public func replacePathWithStrokedPath() { cairo_new_path(_cr) }
+
     public var isPathEmpty: Bool {
         guard let path = cairo_copy_path(_cr) else { return true }
         defer { cairo_path_destroy(path) }
