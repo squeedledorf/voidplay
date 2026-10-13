@@ -18,8 +18,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AudioEngineDelegate {
 
         let files = CommandLine.arguments.dropFirst()
             .filter { !$0.hasPrefix("-") }
-            .map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }
-            .filter { FileManager.default.fileExists(atPath: $0.path) }
+            .compactMap { argument -> URL? in
+                if argument.hasPrefix("http://") || argument.hasPrefix("https://") { return URL(string: argument) }
+                let file = URL(fileURLWithPath: (argument as NSString).expandingTildeInPath)
+                return FileManager.default.fileExists(atPath: file.path) ? file : nil
+            }
         if !files.isEmpty {
             windowManager.audioEngine.loadFiles(files)
             windowManager.audioEngine.play()

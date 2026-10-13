@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import AppKit
 import CoreAudio
 import NullPlayerCore
 
@@ -134,7 +135,9 @@ class AudioEngine {
             "prefetch-playlist": "yes",
             "audio-client-name": "voidplay",
             "volume-max": "100",
-            "ytdl": "no",
+            // YouTube tracks stream through yt-dlp (audio only); other URLs still go straight to FFmpeg.
+            "ytdl": "yes",
+            "ytdl-format": "bestaudio/best",
             "input-default-bindings": "no",
             "audio-pitch-correction": "yes",
         ].merging(mpvOptions) { $1 }) else {
@@ -150,8 +153,33 @@ class AudioEngine {
     // MARK: Queue
 
     func loadFiles(_ urls: [URL]) {
-        let validation = AudioFileValidator.quickValidate(urls: urls, includeVideo: true)
-        loadTracks(validation.validURLs.compactMap { Track(lightweightURL: $0) })
+        let valid = AudioFileValidator.quickValidate(urls: urls, includeVideo: true).validURLs
+        guard valid.contains(where: YouTubeLinks.isYouTube) else {
+            loadTracks(valid.compactMap { Track(lightweightURL: $0) })
+            return
+        }
+        // YouTube links expand to their videos first (yt-dlp takes a few seconds per link), then play.
+        Task { @MainActor [weak self] in
+            var tracks: [Track] = []
+            for url in valid {
+                guard YouTubeLinks.isYouTube(url) else {
+                    tracks.append(Track(lightweightURL: url))
+                    continue
+                }
+                do {
+                    tracks += try await YouTubeLinks.tracks(for: url)
+                } catch {
+                    NSLog("YouTube: %@: %@", url.absoluteString, error.localizedDescription)
+                    let alert = NSAlert()
+                    alert.messageText = "Could not open YouTube link"
+                    alert.informativeText = error.localizedDescription
+                    alert.runModal()
+                }
+            }
+            guard let self, !tracks.isEmpty else { return }
+            self.loadTracks(tracks)
+            self.play()
+        }
     }
 
     func loadTracks(_ tracks: [Track]) {
@@ -515,7 +543,9 @@ class AudioEngine {
     }
 
     private static func mpvTarget(_ url: URL) -> String {
-        url.isFileURL ? url.path : url.absoluteString
+        if url.isFileURL { return url.path }
+        // ytdl:// sends the page straight to yt-dlp instead of FFmpeg failing on it first.
+        return YouTubeLinks.isYouTube(url) ? "ytdl://" + url.absoluteString : url.absoluteString
     }
 
     /// Per-file start/end marks for a cue track, so mpv plays just its slice of the shared file.

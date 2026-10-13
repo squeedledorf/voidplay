@@ -121,6 +121,15 @@ final class WindowManager {
         currentSkin = SkinLoader.shared.loadDefault()
     }
 
+    /// Where downloaded skins live (`~/.local/share/Voidplay/Skins`), created on first use.
+    static var userSkinsDirectory: URL {
+        let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["XDG_DATA_HOME"]
+                      ?? NSHomeDirectory() + "/.local/share")
+            .appendingPathComponent(ClientIdentity.dataDirectoryName).appendingPathComponent("Skins")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
     static func bundledSkinURL(_ name: String) -> URL? {
         Bundle.module.url(forResource: "Resources/Skins/\(name)", withExtension: "wsz")
     }

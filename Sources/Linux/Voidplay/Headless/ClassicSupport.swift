@@ -39,6 +39,7 @@ enum ContextMenuBuilder {
         }
 
         menu.addItem(item("Open File…") { openFiles() })
+        menu.addItem(item("Open URL…") { openURL() })
         menu.addItem(NSMenuItem.separator())
         menu.addItem(item(engine.state == .playing ? "Pause" : "Play") {
             engine.state == .playing ? engine.pause() : engine.play()
@@ -84,8 +85,27 @@ enum ContextMenuBuilder {
         engine.play()
     }
 
+    /// A stream, file URL, or YouTube video/playlist link (expanded to one track per video).
+    private static func openURL() {
+        let alert = NSAlert()
+        alert.messageText = "Open URL"
+        alert.informativeText = "A stream or file address, or a YouTube video or playlist link:"
+        alert.addButton(withTitle: "Open")
+        alert.addButton(withTitle: "Cancel")
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
+        input.placeholderString = "https://www.youtube.com/playlist?list=…"
+        alert.accessoryView = input
+        guard alert.runModal() == .alertFirstButtonReturn,
+              let url = URL(string: input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)),
+              url.scheme != nil else { return }
+        let engine = WindowManager.shared.audioEngine
+        engine.loadFiles([url])
+        if !YouTubeLinks.isYouTube(url) { engine.play() }  // YouTube links start once expanded
+    }
+
     private static func loadSkin() {
         let panel = NSOpenPanel()
+        panel.directoryURL = WindowManager.userSkinsDirectory
         panel.allowedFileExtensions = ["wsz", "zip"]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         WindowManager.shared.loadSkin(from: url)
