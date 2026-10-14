@@ -260,7 +260,18 @@ open class CALayer: NSObject {
         if let image = contents.flatMap({ $0 as? CGImage }) {
             ctx.saveGState()
             ctx.interpolationQuality = magnificationFilter == .nearest ? .none : .default
-            ctx.draw(image, in: contentsFrame(for: image))
+            var frame = contentsFrame(for: image)
+            // A bitmap rendered for this layer's size (rounded up to whole pixels) is blitted 1:1 at
+            // a whole-pixel origin, as Core Animation does, not resampled into a fractional box:
+            // resampling smeared the classic marquee's 6px glyphs at the 1.25 skin scale.
+            let natural = CGSize(width: CGFloat(image.width) / contentsScale, height: CGFloat(image.height) / contentsScale)
+            if abs(natural.width - frame.width) <= 1, abs(natural.height - frame.height) <= 1 {
+                let corner = CGPoint(x: frame.minX, y: frame.maxY).applying(ctx.ctm)
+                let snapped = CGPoint(x: corner.x.rounded(), y: corner.y.rounded()).applying(ctx.ctm.inverted())
+                frame = CGRect(x: snapped.x, y: snapped.y - natural.height, width: natural.width, height: natural.height)
+                ctx.interpolationQuality = .none
+            }
+            ctx.draw(image, in: frame)
             ctx.restoreGState()
         }
         draw(in: ctx)

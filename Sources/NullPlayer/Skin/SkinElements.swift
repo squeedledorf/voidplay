@@ -548,11 +548,14 @@ struct SkinElements {
             let col = clampedState % sliderBarColumns
             let x = sliderBarSpriteX + CGFloat(col) * sliderBarStateWidth
             let y = row == 0 ? sliderBarFirstRowY : sliderBarSecondRowY
-            return NSRect(x: x, y: y, width: sliderBarStateWidth, height: sliderBarHeight)
+            // Frames are 14px on a 15px stride; the 15th column is the sheet's gutter colour.
+            return NSRect(x: x, y: y, width: sliderBarStateWidth - 1, height: sliderBarHeight)
         }
 
         /// Graph display in the EQ window.
         static let graphRect = NSRect(x: 86, y: 17, width: 113, height: 19)
+        /// The graph's backdrop (grid and frame) in eqmain.bmp, drawn into `graphRect`.
+        static let graphBackgroundSource = NSRect(x: 0, y: 294, width: 113, height: 19)
         
         /// Positions on EQ window
         struct Positions {

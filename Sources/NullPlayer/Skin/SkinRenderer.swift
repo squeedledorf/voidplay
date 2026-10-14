@@ -1339,9 +1339,14 @@ class SkinRenderer {
 
     /// Draw the EQ curve over the skin-provided graph well.
     func drawEQGraph(bands: [Float], isEnabled: Bool, in context: CGContext) {
+        let rect = SkinElements.Equalizer.graphRect
+        // The skin's own graph backdrop, as Winamp draws it whether or not the EQ is on.
+        let backdrop = SkinElements.Equalizer.graphBackgroundSource
+        if let eqImage = skin.eqmain, skinImage(eqImage, containsSourceRect: backdrop) {
+            drawSprite(from: eqImage, sourceRect: backdrop, to: rect, in: context)
+        }
         guard isEnabled, bands.count >= 10 else { return }
 
-        let rect = SkinElements.Equalizer.graphRect
         let gradient = eqGraphGradientColors()
         guard !gradient.isEmpty else { return }
 

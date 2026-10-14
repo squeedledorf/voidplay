@@ -118,6 +118,13 @@ final class HyprlandPlacement: WindowPlacement {
 
     override func windowDidMap(_ window: NSWindow) { resolve(window, attempt: 0) }
 
+    /// A hidden window comes back as a new Hyprland client (new address, default border and
+    /// rounding), so forget this one and let the next map find it again by its placement title.
+    override func windowDidHide(_ window: NSWindow) {
+        window.placementID = nil
+        gtk_window_set_title(window.gtkWindowPtr, window.placementToken)
+    }
+
     /// Finds this window among Hyprland's clients by its placement token (retrying while
     /// Hyprland catches up with the new surface), then floats it, places it, and shows the real title.
     private func resolve(_ window: NSWindow, attempt: Int) {
