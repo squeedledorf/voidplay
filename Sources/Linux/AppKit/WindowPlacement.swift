@@ -134,6 +134,7 @@ final class HyprlandPlacement: WindowPlacement {
         if let client = clients.first(where: { $0["pid"] as? Int == pid && $0["title"] as? String == window.placementToken }),
            let address = client["address"] as? String {
             window.placementID = address
+            resolving.remove(ObjectIdentifier(window))
             gtk_window_set_title(window.gtkWindowPtr, window.title)
             var ops: [Op] = [.float]
             if !window.styleMask.contains(.titled) {
@@ -148,15 +149,25 @@ final class HyprlandPlacement: WindowPlacement {
             place(window, resized: true)
             return
         }
-        guard attempt < 80 else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.025) { [weak self, weak window] in
+        // Hyprland lists a client once its surface has a buffer; a window whose first frame waits
+        // on slow work (a .wmz skin loading) takes seconds. Quick retries first, then slower ones.
+        guard attempt < 120, window.isVisible else { resolving.remove(ObjectIdentifier(window)); return }
+        resolving.insert(ObjectIdentifier(window))
+        DispatchQueue.main.asyncAfter(deadline: .now() + (attempt < 80 ? 0.025 : 0.25)) { [weak self, weak window] in
             guard let self, let window else { return }
             self.resolve(window, attempt: attempt + 1)
         }
     }
 
+    /// Windows with a lookup in flight, so a move does not start a second one.
+    private var resolving = Set<ObjectIdentifier>()
+
     override func place(_ window: NSWindow, resized: Bool) {
-        guard let address = window.placementID else { return }
+        guard let address = window.placementID else {
+            // Not found yet (or the lookup gave up): try again now that the app is placing it.
+            if window.isVisible, !resolving.contains(ObjectIdentifier(window)) { resolve(window, attempt: 0) }
+            return
+        }
         let topLeft = NSScreen.layoutTopLeft(of: window.frame)
         var ops: [Op] = [.move(x: Int(topLeft.x.rounded()), y: Int(topLeft.y.rounded()))]
         if resized { ops.append(.resize(width: Int(window.frame.width), height: Int(window.frame.height))) }
