@@ -309,7 +309,10 @@ open class NSWindow: NSResponder {
 
     open func setFrame(_ frameRect: NSRect, display flag: Bool) {
         let resized = frameRect.size != frame.size
-        let moved = frameRect.origin != frame.origin
+        // A window's place on screen is its top-left corner: resizing from the bottom edge keeps
+        // it (while changing the bottom-left origin) and is no move, or a docked stack would ride
+        // along with the playlist's resize grip.
+        let moved = frameRect.minX != frame.minX || frameRect.maxY != frame.maxY
         frame = frameRect
         if resized {
             gtk_widget_set_size_request(canvas, Int32(frameRect.width), Int32(frameRect.height))
