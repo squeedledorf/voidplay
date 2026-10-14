@@ -5,8 +5,7 @@ import NullPlayerCore
 // The visualization tap: upstream AudioEngine's analysis (75-band spectrum, PCM for the
 // oscilloscope, stereo and full-rate PCM, FFT magnitudes, vis_classic's 576-sample waveform),
 // fed from PipeWireCapture instead of an AVAudioEngine mixer tap. The members below the
-// marker are upstream's, nearly verbatim; changes: no BPM detector yet (needs aubio), and
-// notifications/delegate calls go through `engine`.
+// marker are upstream's, nearly verbatim; notifications and delegate calls go through `engine`.
 final class VisualizationTap {
     weak var engine: AudioEngine?
 
@@ -72,6 +71,7 @@ final class VisualizationTap {
     private var spectrumNormalizationMode: SpectrumNormalizationMode = .accurate
     
     /// Real-time BPM detector for tempo display
+    private let bpmDetector = BPMDetector()
     
     
     /// Raw PCM audio data for waveform visualization (mono, normalized -1 to 1)
@@ -362,6 +362,13 @@ final class VisualizationTap {
             // Mix stereo to mono
             for i in 0..<fftSize {
                 fftSamples[i] = (channelData[0][i] + channelData[1][i]) / 2.0
+            }
+        }
+
+        // Feed BPM detector with raw mono samples before windowing.
+        fftSamples.withUnsafeBufferPointer { ptr in
+            if let base = ptr.baseAddress {
+                bpmDetector.process(samples: base, count: fftSize, sampleRate: buffer.format.sampleRate)
             }
         }
 

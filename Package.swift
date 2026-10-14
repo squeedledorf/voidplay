@@ -42,6 +42,8 @@ let package = Package(
         .target(name: "QuartzCore", dependencies: ["CoreGraphics"], path: "Sources/Linux/QuartzCore"),
         .target(name: "CoreImage", dependencies: ["CoreGraphics"], path: "Sources/Linux/CoreImage"),
         .target(name: "UniformTypeIdentifiers", path: "Sources/Linux/UniformTypeIdentifiers"),
+        // aubio (BPM detection): upstream's vendored headers, linked against the system library.
+        .systemLibrary(name: "CAubio", path: "Frameworks/libaubio", pkgConfig: "aubio"),
         .target(name: "MediaPlayer", dependencies: ["AppKit", "CGtk"], path: "Sources/Linux/MediaPlayer"),
         .systemLibrary(name: "CJavaScriptCore", path: "Sources/Linux/CJavaScriptCore", pkgConfig: "javascriptcoregtk-4.1"),
         .target(name: "JavaScriptCore", dependencies: ["CJavaScriptCore"], path: "Sources/Linux/JavaScriptCore"),
@@ -73,7 +75,7 @@ let package = Package(
         .executableTarget(
             name: "voidplay",
             dependencies: [
-                "NullPlayerCore", "Accelerate", "AppKit", "CMpv", "QuartzCore", "CoreImage", "UniformTypeIdentifiers", "os", "Metal", "MetalKit", "MediaPlayer", "JavaScriptCore", "CoreText", "ImageIO", "CVisClassicCore", "AVFoundation", "CoreAudio", "CryptoKit", "ZIPFoundation", "FlyingFox",
+                "NullPlayerCore", "Accelerate", "AppKit", "CMpv", "QuartzCore", "CoreImage", "UniformTypeIdentifiers", "os", "Metal", "MetalKit", "MediaPlayer", "CAubio", "JavaScriptCore", "CoreText", "ImageIO", "CVisClassicCore", "AVFoundation", "CoreAudio", "CryptoKit", "ZIPFoundation", "FlyingFox",
                 .product(name: "SQLite", package: "SQLite.swift"),
             ],
             path: "Sources",

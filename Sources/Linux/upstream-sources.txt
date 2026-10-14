@@ -91,3 +91,4 @@ Sources/NullPlayer/WinampModern/WinampModernLevelMeter.swift
 Sources/NullPlayer/Utilities/AlphaPlane.swift
 Sources/NullPlayer/Visualization/GeissMenuBuilder.swift
 Sources/NullPlayer/Visualization/TripexMenuBuilder.swift
+Sources/NullPlayer/Audio/BPMDetector.swift
