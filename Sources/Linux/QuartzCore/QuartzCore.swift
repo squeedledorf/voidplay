@@ -92,6 +92,14 @@ open class CABasicAnimation: CAPropertyAnimation {
 
 /// A rectangle of content in a tree, positioned by `position`/`anchorPoint`, painted from
 /// `contents` (a CGImage) or `draw(in:)`.
+public struct CALayerContentsFormat: RawRepresentable, Hashable, Sendable {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+    public static let RGBA8Uint = CALayerContentsFormat(rawValue: "RGBA8")
+    public static let RGBA16Float = CALayerContentsFormat(rawValue: "RGBAh")
+    public static let gray8Uint = CALayerContentsFormat(rawValue: "R8")
+}
+
 open class CALayer: NSObject {
     /// Called when any layer changes how it draws; AppKit points it at "redraw the windows".
     nonisolated(unsafe) public static var didChange: (() -> Void)?
@@ -105,6 +113,8 @@ open class CALayer: NSObject {
     open var transform = CATransform3DIdentity { didSet { Self.didChange?() } }
     open var contents: Any? { didSet { Self.didChange?() } }
     open var contentsScale: CGFloat = 1
+    open var contentsFormat: CALayerContentsFormat = .RGBA8Uint
+    open var wantsExtendedDynamicRangeContent = false
     open var contentsGravity: CALayerContentsGravity = .resize
     open var contentsRect = CGRect(x: 0, y: 0, width: 1, height: 1)
     open var masksToBounds = false

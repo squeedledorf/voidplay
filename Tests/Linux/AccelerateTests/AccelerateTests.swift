@@ -32,3 +32,24 @@ final class AccelerateTests: XCTestCase {
         vDSP_meanv(v, 2, &r, 2); XCTAssertEqual(r, 1.5)
     }
 }
+
+final class ClassicFFTTests: XCTestCase {
+    /// A full-scale cosine at bin 4 of a 16-point frame reads 16·2/2 = 16 there (zrip's ×2 on N/2).
+    func testZripPutsCosineInItsBin() {
+        let log2n: vDSP_Length = 4, n = 16, half = 8
+        let setup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))!
+        let signal = (0..<n).map { Float(cos(2 * Double.pi * 4 * Double($0) / Double(n))) }
+        var real = [Float](repeating: 0, count: half), imag = [Float](repeating: 0, count: half)
+        var magnitudes = [Float](repeating: 0, count: half)
+        real.withUnsafeMutableBufferPointer { r in imag.withUnsafeMutableBufferPointer { i in
+            var split = DSPSplitComplex(realp: r.baseAddress!, imagp: i.baseAddress!)
+            signal.withUnsafeBufferPointer { s in
+                s.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: half) { vDSP_ctoz($0, 2, &split, 1, vDSP_Length(half)) }
+            }
+            vDSP_fft_zrip(setup, &split, 1, log2n, FFTDirection(FFT_FORWARD))
+            vDSP_zvabs(&split, 1, &magnitudes, 1, vDSP_Length(half))
+        } }
+        XCTAssertEqual(magnitudes[4], 16, accuracy: 0.01)
+        XCTAssertEqual(magnitudes[3], 0, accuracy: 0.01)
+    }
+}

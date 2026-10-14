@@ -83,6 +83,40 @@ open class NSApplication {
     /// The app's windows (creation order).
     open var windows: [NSWindow] { NSWindow.all }
 
+    /// Whether one of our windows has the focus.
+    open var isActive: Bool { NSWindow.all.contains { $0.isKeyWindow } }
+
+    /// The input event being handled now (set while a window routes it).
+    open internal(set) var currentEvent: NSEvent?
+
+    /// Menu bar and Dock hiding: the compositor's business here.
+    public struct PresentationOptions: OptionSet, Sendable {
+        public let rawValue: UInt
+        public init(rawValue: UInt) { self.rawValue = rawValue }
+        public static let autoHideDock = PresentationOptions(rawValue: 1 << 0)
+        public static let autoHideMenuBar = PresentationOptions(rawValue: 1 << 2)
+    }
+    open var presentationOptions: PresentationOptions = []
+
+    /// No nested event loop for tracking here: the caller sees no event (the press has already
+    /// been delivered through the normal path).
+    /// ponytail: a real wait would pump GTK until a matching event; nothing needs it yet.
+    open func nextEvent(matching mask: NSEvent.EventTypeMask, until expiration: Date?, inMode mode: RunLoop.Mode,
+                        dequeue: Bool) -> NSEvent? { nil }
+
+    /// The action to `target`, or along the key window's responder chain, then the delegate.
+    @discardableResult
+    open func sendAction(_ action: Selector, to target: Any?, from sender: Any?) -> Bool {
+        if let target { return SelectorRegistry.invoke(action, on: target as AnyObject, sender: sender) }
+        var responder: NSResponder? = NSWindow.all.first { $0.isKeyWindow }?.firstResponder
+        while let current = responder {
+            if SelectorRegistry.invoke(action, on: current, sender: sender) { return true }
+            responder = current.nextResponder
+        }
+        if let delegate { return SelectorRegistry.invoke(action, on: delegate, sender: sender) }
+        return false
+    }
+
     open func terminate(_ sender: Any?) {
         let note = Notification(name: Self.willTerminateNotification, object: self)
         delegate?.applicationWillTerminate(note)
@@ -91,4 +125,9 @@ open class NSApplication {
         UserDefaults.standard.synchronize()
         exit(0)
     }
+}
+
+extension RunLoop.Mode {
+    /// AppKit's mode while a control tracks the mouse; nothing runs in it here.
+    public static let eventTracking = RunLoop.Mode("NSEventTrackingRunLoopMode")
 }

@@ -4,9 +4,6 @@ import NullPlayerCore
 // Types from window families that are not on Linux yet, as far as the classic windows name them.
 // Each goes when its real upstream file joins upstream-sources.txt.
 
-final class WinampModernMainWindowController: NSWindowController {
-    var currentPalette: WasabiPalette? { nil }
-}
 final class AudionFaceMainWindowController: NSWindowController {}
 
 /// The GPU spectrum overlay (Metal on macOS). Until the OpenGL/Vulkan port, no shader mode is
@@ -40,6 +37,8 @@ final class SpectrumAnalyzerView: NSView {
 
 /// The video player window (libmpv video stage). Never instantiated yet; members answer idle.
 final class VideoPlayerWindowController: NSWindowController {
+    var contextMenu: NSMenu? { nil }
+    func toggleFullScreen(_ sender: Any?) {}
     var hasVideoOutput: Bool { false }
     var presentationSize: CGSize { .zero }
     var currentTitle: String? { nil }
@@ -94,6 +93,10 @@ final class VisualizationGLView: NSView {
     func switchEngine(to type: VisualizationType, forceReload: Bool = false, persistPreference: Bool = true) {}
     func renderOffscreenImage(pixelWidth: Int, pixelHeight: Int) -> CGImage? { nil }
     func updatePCM(_ data: [Float]) {}
+    func updateSpectrum(_ data: [Float]) {}
+    func setAudioActive(_ active: Bool) {}
+    var isRendering: Bool { false }
+    func resumeRenderingAfterWindowTransition() {}
     func stopRendering() {}
     var geissEffectCount: Int { 0 }
     var currentGeissEffectName: String { "" }
@@ -142,4 +145,68 @@ enum TripexEngine {
         static let cycleInterval = "tripexCycleInterval"
         static let cycleMode = "tripexCycleMode"
     }
+}
+
+// MARK: Winamp Modern (.wal) pieces not on Linux yet
+
+/// The skin-settings and colour-theme dialogs (Auto Layout forms): later. Menu entries open nothing.
+final class WinampModernSkinSettingsWindowController: NSWindowController {
+    init(runtime: WinampModernScriptRuntime) { super.init(window: nil) }
+    required init?(coder: NSCoder) { nil }
+    func refreshValues() {}
+}
+
+final class WinampModernSkinColorsWindowController: NSWindowController {
+    init(controller: WinampModernMainWindowController) { super.init(window: nil) }
+    required init?(coder: NSCoder) { nil }
+    func refreshValues() {}
+}
+
+/// A `.wal` skin's embedded web browser needs WebKitGTK: until then the box stays empty.
+final class WinampModernBrowserSurfaceView: NSView, WinampModernBrowserSurface {
+    init(frame frameRect: NSRect, vfs: Any?) { super.init(frame: frameRect) }
+    required init?(coder: NSCoder) { nil }
+    var view: NSView { self }
+    func navigate(_ request: WinampModernBrowserRequest) {}
+    func setVisible(_ visible: Bool) { isHidden = !visible }
+    func setShowsLocationBar(_ shows: Bool) {}
+    func applySkinScale(_ scale: CGFloat) {}
+    func unmountFromHolder() { removeFromSuperview() }
+    func prepareForUITeardown() {}
+}
+
+/// Windows a `.wal` skin can host that are not on Linux yet: empty panels of their usual size.
+class NotYetPortedPanel: NSView, WinampModernHostedSurface {
+    var view: NSView { self }
+    func configureForHostedSurface(context: WinampModernHostedSurfaceContext) {}
+    func applyPalette(_ style: WinampModernSurfaceStyle) {}
+    func applySkinScale(_ scale: CGFloat) {}
+    func resume() {}
+    func suspend() {}
+    func unmountFromHolder() { removeFromSuperview() }
+    func prepareForUITeardown() {}
+}
+final class EqualizerStudioView: NotYetPortedPanel { static let designSize = NSSize(width: 480, height: 260) }
+final class WaveformView: NotYetPortedPanel {}
+final class SpectrumView: NotYetPortedPanel {}
+final class SonosWindowView: NotYetPortedPanel {}
+final class PeppyMeterView: NotYetPortedPanel {}
+final class NetworkMonitorView: NotYetPortedPanel {}
+final class ModernProjectMView: NotYetPortedPanel {}
+final class CavaView: NotYetPortedPanel {}
+final class AudioAnalysisView: NotYetPortedPanel {}
+final class ArtWindowView: NotYetPortedPanel {}
+
+final class PlexBrowserView: NotYetPortedPanel {
+    init(embeddedFrame: NSRect, skinScale: @escaping () -> CGFloat, presentLinkSheet: @escaping () -> Void) {
+        super.init(frame: embeddedFrame)
+    }
+    required init?(coder: NSCoder) { nil }
+    var browseModeRawValue: Int = 0
+    func showLinkSheetFromHost() {}
+    func applyWinampModernStyle(_ style: WinampModernSurfaceStyle) {}
+}
+
+final class PlexLinkSheet {
+    func showAsSheet(from window: NSWindow, completion: @escaping (Bool) -> Void) {}
 }

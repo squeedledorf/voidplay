@@ -116,12 +116,6 @@ open class NSMenuItem {
     func perform() {
         if let handler { handler(self); return }
         guard let action else { return }
-        if let target { SelectorRegistry.invoke(action, on: target, sender: self); return }
-        var responder: NSResponder? = NSWindow.all.first { $0.isKeyWindow }?.firstResponder
-        while let current = responder {
-            if SelectorRegistry.invoke(action, on: current, sender: self) { return }
-            responder = current.nextResponder
-        }
-        if let delegate = NSApplication.shared.delegate { SelectorRegistry.invoke(action, on: delegate, sender: self) }
+        NSApplication.shared.sendAction(action, to: target, from: self)
     }
 }

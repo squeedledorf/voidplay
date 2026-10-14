@@ -34,7 +34,7 @@ let package = Package(
         .systemLibrary(name: "CGdkPixbuf", path: "Sources/Linux/CGdkPixbuf", pkgConfig: "gdk-pixbuf-2.0"),
         .systemLibrary(name: "CGtk", path: "Sources/Linux/CGtk", pkgConfig: "gtk4"),
         .systemLibrary(name: "CX11", path: "Sources/Linux/CX11", pkgConfig: "gtk4-x11"),
-        .target(name: "AppKit", dependencies: ["CGdkPixbuf", "CGtk", "CX11", "CoreGraphics", "ImageIO", "QuartzCore", "UniformTypeIdentifiers"],
+        .target(name: "AppKit", dependencies: ["CGdkPixbuf", "CGtk", "CX11", "CoreGraphics", "CoreText", "ImageIO", "QuartzCore", "UniformTypeIdentifiers"],
                 path: "Sources/Linux/AppKit"),
         .systemLibrary(name: "CMpv", path: "Sources/Linux/CMpv", pkgConfig: "mpv"),
         .systemLibrary(name: "CFFmpeg", path: "Sources/Linux/CFFmpeg", pkgConfig: "libavformat"),
@@ -87,7 +87,12 @@ let package = Package(
             swiftSettings: [
                 // Darwin's Foundation includes URLSession; on Linux it lives in FoundationNetworking.
                 .unsafeFlags(["-Xfrontend", "-import-module", "-Xfrontend", "FoundationNetworking",
-                              "-Xfrontend", "-import-module", "-Xfrontend", "FoundationXML"]),
+                              "-Xfrontend", "-import-module", "-Xfrontend", "FoundationXML",
+                              // Apple's AppKit and Foundation re-export these; upstream relies on it.
+                              "-Xfrontend", "-import-module", "-Xfrontend", "CoreGraphics",
+                              "-Xfrontend", "-import-module", "-Xfrontend", "CoreText",
+                              "-Xfrontend", "-import-module", "-Xfrontend", "ImageIO",
+                              "-Xfrontend", "-import-module", "-Xfrontend", "CoreImage"]),
             ],
             plugins: ["LinuxSources"]
         ),

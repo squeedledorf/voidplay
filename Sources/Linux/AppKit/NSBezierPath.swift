@@ -158,9 +158,32 @@ open class NSGradient {
 }
 
 public final class NSColorSpace: @unchecked Sendable {
-    public static let sRGB = NSColorSpace()
-    public static let deviceRGB = NSColorSpace()
-    public static let genericRGB = NSColorSpace()
+    public let localizedName: String?
+    init(_ name: String) { localizedName = name }
+    public static let sRGB = NSColorSpace("sRGB IEC61966-2.1")
+    public static let deviceRGB = NSColorSpace("Device RGB")
+    public static let genericRGB = NSColorSpace("Generic RGB")
+}
+
+/// What a display can show: 8-bit sRGB on Linux (no colour management or HDR here).
+public enum NSDisplayGamut: Sendable { case sRGB, p3 }
+
+extension NSWindow {
+    public struct Depth: RawRepresentable, Sendable {
+        public let rawValue: Int32
+        public init(rawValue: Int32) { self.rawValue = rawValue }
+        public static let twentyfourBitRGB = Depth(rawValue: 0x208)
+    }
+    public var depthLimit: Depth { .twentyfourBitRGB }
+    public var hasDynamicDepthLimit: Bool { false }
+    public func canRepresent(_ gamut: NSDisplayGamut) -> Bool { gamut == .sRGB }
+    public var colorSpace: NSColorSpace? { .sRGB }
+}
+
+extension NSScreen {
+    public var maximumExtendedDynamicRangeColorComponentValue: CGFloat { 1 }
+    public var maximumPotentialExtendedDynamicRangeColorComponentValue: CGFloat { 1 }
+    public var colorSpace: NSColorSpace? { .sRGB }
 }
 
 /// Accessibility objects exist for the AT-SPI bridge to come; today they hold their values only.

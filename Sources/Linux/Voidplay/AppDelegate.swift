@@ -15,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AudioEngineDelegate {
         windowManager.loadDefaultSkin()
         if windowManager.launchesInWMPMode {
             windowManager.showWMPMode()
+        } else if windowManager.launchesInWinampModernMode {
+            windowManager.showWinampModernMode()
         } else {
             windowManager.showMainWindow()
             windowManager.showEqualizer()
@@ -26,8 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AudioEngineDelegate {
         // builds honour it too, so tests can measure the optimised build.
         if let skinPath = ProcessInfo.processInfo.environment["VOIDPLAY_SKIN"] {
             let url = URL(fileURLWithPath: skinPath)
-            if url.pathExtension.lowercased() == "wmz" { windowManager.loadWMPSkin(from: url) }
-            else { windowManager.loadSkin(from: url) }
+            windowManager.loadAnySkin(from: url)
         }
 
         let files = CommandLine.arguments.dropFirst()

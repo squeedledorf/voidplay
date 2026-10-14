@@ -14,7 +14,7 @@ public final class CGContext: @unchecked Sendable {
     public let bytesPerRow: Int
     public let bitsPerComponent: Int
     public let bitsPerPixel: Int
-    public let bitmapInfo: UInt32
+    public let bitmapInfo: CGBitmapInfo
 
     private let surface: OpaquePointer?
     /// Bitmap memory in the caller's layout, mirrored from Cairo after each drawing call when
@@ -92,7 +92,7 @@ public final class CGContext: @unchecked Sendable {
         self.bytesPerRow = rowBytes
         self.bitsPerComponent = bitsPerComponent
         self.bitsPerPixel = bpp
-        self.bitmapInfo = bitmapInfo
+        self.bitmapInfo = CGBitmapInfo(rawValue: bitmapInfo)
         ownedMemory = owned
         mirror = direct ? nil : memory
         mirrorLayout = direct ? nil : layout
@@ -113,7 +113,7 @@ public final class CGContext: @unchecked Sendable {
         bytesPerRow = width * 4
         bitsPerComponent = 8
         bitsPerPixel = 32
-        bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
     }
 
     deinit {
@@ -231,6 +231,12 @@ public final class CGContext: @unchecked Sendable {
     }
 
     public func setFillColor(gray: CGFloat, alpha: CGFloat) { gstate.fill = (gray, gray, gray, alpha) }
+
+    /// Bitmap contexts here are all device RGB (or alpha-only, which has none).
+    public var colorSpace: CGColorSpace? { bitsPerPixel == 8 ? nil : CGColorSpaceCreateDeviceRGB() }
+
+    /// The current fill colour (for CoreText's draw-in-context-colour lines).
+    public var _fillRGBA: (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) { (gstate.fill.r, gstate.fill.g, gstate.fill.b, gstate.fill.a) }
 
     public func setStrokeColor(_ color: CGColor) {
         let c = color.rgba

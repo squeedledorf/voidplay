@@ -1,15 +1,17 @@
 import Foundation
 
 public final class CGColorSpace: @unchecked Sendable {
-    public let name: String
-    public init?(name: String) { self.name = name }
+    let identifier: String
+    public init?(name: String) { identifier = name }
+    /// Optional as Apple's (a space made from ICC data has none); every space here is named.
+    public var name: String? { identifier }
     public static let sRGB = "kCGColorSpaceSRGB"
     public static let linearGray = "kCGColorSpaceLinearGray"
     public static let genericGrayGamma2_2 = "kCGColorSpaceGenericGrayGamma2_2"
     public static let genericRGBLinear = "kCGColorSpaceGenericRGBLinear"
     public static let deviceRGB = CGColorSpace(name: "kCGColorSpaceDeviceRGB")!
-    public var numberOfComponents: Int { name.contains("Gray") ? 1 : 3 }
-    public var model: CGColorSpaceModel { name.contains("Gray") ? .monochrome : .rgb }
+    public var numberOfComponents: Int { identifier.contains("Gray") ? 1 : 3 }
+    public var model: CGColorSpaceModel { identifier.contains("Gray") ? .monochrome : .rgb }
 }
 
 public enum CGColorSpaceModel: Int32, Sendable {

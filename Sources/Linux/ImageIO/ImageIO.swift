@@ -23,11 +23,11 @@ public final class CGImageSource: @unchecked Sendable {
 }
 
 public func CGImageSourceCreateWithData(_ data: CFData, _ options: CFDictionary?) -> CGImageSource? {
-    decodeImage(data).map(CGImageSource.init)
+    decodeImage(data as Data).map(CGImageSource.init)
 }
 
 public func CGImageSourceCreateWithURL(_ url: CFURL, _ options: CFDictionary?) -> CGImageSource? {
-    (try? Data(contentsOf: url)).flatMap { CGImageSourceCreateWithData($0, options) }
+    (try? Data(contentsOf: url)).flatMap { CGImageSourceCreateWithData($0 as NSData, options) }
 }
 
 public func CGImageSourceGetCount(_ source: CGImageSource) -> Int { 1 }

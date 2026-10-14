@@ -14,7 +14,8 @@ final class WindowManager {
     private(set) var currentSkinPath: String?
     static let lastClassicSkinPathKey = "lastClassicSkinPath"
 
-    private(set) var mainWindowController: MainWindowProviding?
+    /// The classic main window, or the `.wal` player in Winamp Modern mode (WinampModernMode.swift).
+    var mainWindowController: MainWindowProviding?
     private(set) var playlistWindowController: PlaylistWindowProviding?
     private(set) var equalizerWindowController: EQWindowProviding?
     /// The `.wmz` player while a WMP skin is the UI (WMPMode.swift); nil in classic mode.
@@ -36,11 +37,14 @@ final class WindowManager {
     var hideTitleBars: Bool { false }
     var isAlwaysOnTop = false
     var isWindowLayoutLocked = false
-    var uiMode: PlayerUIMode { wmpMainWindowController == nil ? .classic : .wmp }
+    var uiMode: PlayerUIMode {
+        if wmpMainWindowController != nil { return .wmp }
+        return mainWindowController is WinampModernMainWindowController ? .winampModern : .classic
+    }
     var isRunningModernUI: Bool { false }
     var isRunningWMPUI: Bool { wmpMainWindowController != nil }
     var isModernUIEnabled: Bool { false }
-    var runningControllerFamily: PlayerUIControllerFamily { isRunningWMPUI ? .wmp : .classic }
+    var runningControllerFamily: PlayerUIControllerFamily { uiMode.controllerFamily }
 
     var playlistChromeScale: CGFloat {
         if let main = mainWindowController?.window, main.frame.width > 0 { return main.frame.width / Skin.baseMainSize.width }
@@ -151,28 +155,38 @@ final class WindowManager {
         mainWindowController?.windowVisibilityDidChange()
     }
 
-    var isPlaylistVisible: Bool { playlistWindowController?.window?.isVisible ?? false }
-    var isEqualizerVisible: Bool { equalizerWindowController?.window?.isVisible ?? false }
+    // A .wal skin's own playlist or equalizer answers first (WinampModernMode.swift).
+    var isPlaylistVisible: Bool {
+        winampModernSurfaceIsVisible(.playlist) ?? (playlistWindowController?.window?.isVisible ?? false)
+    }
+    var isEqualizerVisible: Bool {
+        winampModernSurfaceIsVisible(.equalizer) ?? (equalizerWindowController?.window?.isVisible ?? false)
+    }
 
-    func showEqualizer() {
+    func showEqualizer() { if !routeWinampModernSurface(.equalizer, toggle: false) { showClassicEqualizer() } }
+    func showPlaylist() { if !routeWinampModernSurface(.playlist, toggle: false) { showClassicPlaylist() } }
+    func toggleEqualizer() { if !routeWinampModernSurface(.equalizer, toggle: true) { toggleClassicEqualizer() } }
+    func togglePlaylist() { if !routeWinampModernSurface(.playlist, toggle: true) { toggleClassicPlaylist() } }
+
+    func showClassicEqualizer() {
         if equalizerWindowController == nil { equalizerWindowController = EQWindowController() }
         equalizerWindowController?.showWindow(nil)
         notifyMainWindowVisibilityChanged()
     }
 
-    func showPlaylist() {
+    func showClassicPlaylist() {
         if playlistWindowController == nil { playlistWindowController = PlaylistWindowController() }
         playlistWindowController?.showWindow(nil)
         notifyMainWindowVisibilityChanged()
     }
 
-    func toggleEqualizer() {
-        if isEqualizerVisible { equalizerWindowController?.window?.orderOut(nil) } else { showEqualizer() }
+    func toggleClassicEqualizer() {
+        if equalizerWindowController?.window?.isVisible == true { equalizerWindowController?.window?.orderOut(nil) } else { showClassicEqualizer() }
         notifyMainWindowVisibilityChanged()
     }
 
-    func togglePlaylist() {
-        if isPlaylistVisible { playlistWindowController?.window?.orderOut(nil) } else { showPlaylist() }
+    func toggleClassicPlaylist() {
+        if playlistWindowController?.window?.isVisible == true { playlistWindowController?.window?.orderOut(nil) } else { showClassicPlaylist() }
         notifyMainWindowVisibilityChanged()
     }
 

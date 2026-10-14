@@ -245,3 +245,25 @@ public func vDSP_vfltu8(_ a: UnsafePointer<UInt8>, _ ia: vDSP_Stride, _ c: Unsaf
                         _ ic: vDSP_Stride, _ n: vDSP_Length) {
     for i in 0..<Int(n) { c[i * ic] = Float(a[i * ia]) }
 }
+
+public let kvImageDoNotTile: UInt32 = 16
+
+/// Per-channel lookup over a 32-bit buffer; the tables go in memory order (nil leaves a channel).
+public func vImageTableLookUp_ARGB8888(_ src: UnsafePointer<vImage_Buffer>, _ dest: UnsafePointer<vImage_Buffer>,
+                                       _ alphaTable: UnsafePointer<UInt8>?, _ redTable: UnsafePointer<UInt8>?,
+                                       _ greenTable: UnsafePointer<UInt8>?, _ blueTable: UnsafePointer<UInt8>?,
+                                       _ flags: vImage_Flags) -> vImage_Error {
+    let tables = [alphaTable, redTable, greenTable, blueTable]
+    let s = src.pointee, d = dest.pointee
+    for y in 0..<Int(s.height) {
+        let input = s.data.advanced(by: y * s.rowBytes).assumingMemoryBound(to: UInt8.self)
+        let output = d.data.advanced(by: y * d.rowBytes).assumingMemoryBound(to: UInt8.self)
+        for x in 0..<Int(s.width) {
+            for channel in 0..<4 {
+                let value = input[x * 4 + channel]
+                output[x * 4 + channel] = tables[channel].map { $0[Int(value)] } ?? value
+            }
+        }
+    }
+    return kvImageNoError
+}

@@ -156,13 +156,11 @@ enum TextLayout {
         return size(of: layout)
     }
 
-    static func metrics(for font: NSFont) -> (ascent: CGFloat, descent: CGFloat) {
-        let description = font.makeDescription()
-        defer { pango_font_description_free(description) }
-        guard let metrics = pango_context_get_metrics(measuringContext, description, nil) else { return (font.pointSize * 0.8, font.pointSize * 0.2) }
-        defer { pango_font_metrics_unref(metrics) }
-        let scale = CGFloat(PANGO_SCALE)
-        return (CGFloat(pango_font_metrics_get_ascent(metrics)) / scale, CGFloat(pango_font_metrics_get_descent(metrics)) / scale)
+    /// Where a line's baseline sits below its box top, as `draw` places it.
+    static func baselineOffset(for font: NSFont) -> CGFloat {
+        let layout = make("X", attributes: [.font: font], width: nil, cr: nil)
+        defer { g_object_unref(gcast(layout)) }
+        return CGFloat(pango_layout_get_baseline(layout)) / CGFloat(PANGO_SCALE)
     }
 
     /// Draws `text` with its line box's top-left at `rect`'s top-left (in the view's terms), upright
@@ -261,4 +259,11 @@ extension NSAttributedString {
                              context: NSStringDrawingContext? = nil) -> NSRect {
         string.boundingRect(with: size, options: options, attributes: leadingAttributes, context: context)
     }
+}
+
+/// TextKit's layout manager, for the one question upstream asks it.
+public final class NSLayoutManager {
+    public init() {}
+    public func defaultBaselineOffset(for font: NSFont) -> CGFloat { TextLayout.baselineOffset(for: font) }
+    public func defaultLineHeight(for font: NSFont) -> CGFloat { TextLayout.measure("X", attributes: [.font: font]).height }
 }

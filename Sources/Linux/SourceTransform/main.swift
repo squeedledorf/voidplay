@@ -9,7 +9,7 @@ import Foundation
 // items, notification observers and timers can call them by name.
 // Edits never add or remove lines, so `#sourceLocation` keeps diagnostics on upstream lines.
 //
-// Usage: source-transform transform <input.swift> <output.swift> <id> [first-last]
+// Usage: source-transform transform <input.swift> <output.swift> <id> [first-last[@Type]]
 //        source-transform registry <output.swift> <id>...
 
 struct ObjCMethod {
@@ -267,6 +267,19 @@ final class Transformer {
                 return
             }
         }
+        if (word == "private" || word == "fileprivate") && !scopes.isEmpty {
+            // A private *nested* type is out of the registry's reach (it sits after the file's
+            // types); widened to internal, which its enclosing type still namespaces.
+            var j = k
+            while j < src.count, src[j] == 32 { j += 1 }
+            var e = j
+            while e < src.count, Self.isIdent(src[e]) || src[e] == 32 { e += 1 }
+            let following = String(decoding: src[j..<e], as: UTF8.self).split(separator: " ")
+            if let keyword = following.first(where: { $0 != "final" }), ["class", "struct", "enum"].contains(keyword) {
+                blank(k - i)
+                return
+            }
+        }
         if Self.typeKeywords.contains(word) || word == "protocol" {
             var j = k
             while j < src.count, src[j] == 32 { j += 1 }
@@ -330,8 +343,12 @@ case "transform" where args.count == 5 || args.count == 6:
     // Optional "first-last" line range: compile only that slice of a large upstream file.
     var firstLine = 1
     var imports: [String] = []
+    // "first-last@Type": the slice is members of `Type`, compiled as an extension of it.
+    var enclosingType: String?
     if args.count == 6 {
-        let bounds = args[5].split(separator: "-").compactMap { Int($0) }
+        let spec = args[5].split(separator: "@", maxSplits: 1).map(String.init)
+        enclosingType = spec.count > 1 ? spec[1] : nil
+        let bounds = spec[0].split(separator: "-").compactMap { Int($0) }
         guard bounds.count == 2, bounds[0] >= 1, bounds[1] >= bounds[0] else {
             FileHandle.standardError.write(Data("bad line range \(args[5])\n".utf8)); exit(2)
         }
@@ -362,7 +379,9 @@ case "transform" where args.count == 5 || args.count == 6:
     if !body.hasSuffix("\n") { body += "\n" }
     // A slice keeps its file's imports (which may sit outside the slice).
     let header = (firstLine > 1 ? imports.joined(separator: "\n") + "\n" : "")
+        + (enclosingType.map { "extension \($0) {\n" } ?? "")
         + "#sourceLocation(file: \"\(input.path)\", line: \(firstLine))\n"
+    if enclosingType != nil { body += "}\n" }
     try (header + body + registrationCode(id: args[4], methods: transformer.methods))
         .write(to: URL(fileURLWithPath: args[3]), atomically: true, encoding: .utf8)
 case "registry" where args.count >= 3:

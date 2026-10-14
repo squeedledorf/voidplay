@@ -179,6 +179,8 @@ open class NSWindow: NSResponder {
     }
 
     public var windowNumber: Int { Int(bitPattern: UInt(bitPattern: ObjectIdentifier(self).hashValue)) & 0x7FFF_FFFF }
+    /// Live resizes are the compositor's; we only see the result.
+    open var inLiveResize: Bool { false }
     open var isKeyWindow: Bool { gtk_window_is_active(gtkWindowPtr) != 0 }
     open var isMainWindow: Bool { isKeyWindow }
     open var canBecomeKey: Bool { true }
@@ -481,6 +483,8 @@ open class NSWindow: NSResponder {
 
     private func post(_ event: NSEvent) {
         guard let event = NSEvent.filter(event) else { return }
+        NSApplication.shared.currentEvent = event
+        defer { NSApplication.shared.currentEvent = nil }
         sendEvent(event)
     }
 

@@ -170,6 +170,12 @@ open class NSView: NSResponder {
 
     open func draw(_ dirtyRect: NSRect) {}
 
+    /// Views redraw whole here, so there is no finer list of dirty rects to report.
+    public func getRectsBeingDrawn(_ rects: UnsafeMutablePointer<UnsafePointer<NSRect>?>?, count: UnsafeMutablePointer<Int>?) {
+        rects?.pointee = nil
+        count?.pointee = 0
+    }
+
     open func setNeedsDisplay(_ invalidRect: NSRect) { needsDisplay = true }
 
     /// Draws now as far as GTK allows: the next frame repaints this window.

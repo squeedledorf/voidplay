@@ -27,6 +27,16 @@ enum EQProfileMenu {
 /// (which reaches every window family) compiles here.
 /// ponytail: transport, windows, skins and quit only.
 enum ContextMenuBuilder {
+    /// A `.wal` skin's menu-bar entries (File, Play, Options…) all open the player menu for now.
+    /// ponytail: upstream builds a menu per entry; port ContextMenuBuilder's builders to split them.
+    static func winampModernMenuBarMenu(for identifier: String) -> NSMenu? {
+        guard WindowManager.shared.uiMode.controllerFamily == .winampModern else { return nil }
+        return buildMenu()
+    }
+
+    /// Visualization engines: none on Linux yet.
+    static func buildVisualizationsMenu() -> NSMenu { NSMenu(title: "Visualizations") }
+
     static func buildMenu(includeOutputDevices: Bool = true, includeRepeatShuffle: Bool = true) -> NSMenu {
         let wm = WindowManager.shared
         let engine = wm.audioEngine
@@ -76,7 +86,7 @@ enum ContextMenuBuilder {
         return menu
     }
 
-    private static func openFiles() {
+    static func openFiles() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
@@ -107,18 +117,9 @@ enum ContextMenuBuilder {
     private static func loadSkin() {
         let panel = NSOpenPanel()
         panel.directoryURL = WindowManager.userSkinsDirectory
-        panel.allowedFileExtensions = ["wsz", "zip", "wmz"]
+        panel.allowedFileExtensions = ["wsz", "zip", "wmz", "wal"]
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let wm = WindowManager.shared
-        if url.pathExtension.lowercased() == "wmz" {
-            wm.loadWMPSkin(from: url)
-        } else if wm.loadSkin(from: url), wm.isRunningWMPUI {
-            wm.leaveWMPMode()
-            wm.showMainWindow()
-            wm.showEqualizer()
-            wm.showPlaylist()
-            wm.snapToDefaultPositions()
-        }
+        WindowManager.shared.loadAnySkin(from: url)
     }
 }
 
@@ -129,4 +130,12 @@ extension NSWindow {
         get { skinShadowFlags[ObjectIdentifier(self)] ?? false }
         set { skinShadowFlags[ObjectIdentifier(self)] = newValue }
     }
+}
+
+/// The main menu's actions a `.wal` skin's own buttons call.
+final class MenuActions {
+    static let shared = MenuActions()
+    func openFile() { ContextMenuBuilder.openFiles() }
+    /// ClassicPro engine import (for cPro skins): later.
+    func importClassicProEngineFromFile() {}
 }

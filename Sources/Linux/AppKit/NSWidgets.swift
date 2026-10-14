@@ -214,4 +214,4 @@ extension NSTextField {
     public func currentEditor() -> NSView? { nil }
 }
 
-@preconcurrency @MainActor public var NSApp: NSApplication { NSApplication.shared }
+@preconcurrency @MainActor public var NSApp: NSApplication! { NSApplication.shared }

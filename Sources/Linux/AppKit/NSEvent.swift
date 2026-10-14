@@ -195,7 +195,7 @@ open class NSTrackingArea {
     public let userInfo: [AnyHashable: Any]?
     var inside = false
 
-    public init(rect: NSRect, options: Options, owner: AnyObject?, userInfo: [AnyHashable: Any]?) {
+    public init(rect: NSRect, options: Options, owner: AnyObject?, userInfo: [AnyHashable: Any]? = nil) {
         self.rect = rect
         self.options = options
         self.owner = owner

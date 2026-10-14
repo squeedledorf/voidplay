@@ -2,7 +2,7 @@ import Foundation
 import CCairo
 
 /// On Linux, `x as CFData` is an identity cast so upstream's `Data(...) as CFData` compiles.
-public typealias CFData = Data
+public typealias CFData = NSData
 // Core Foundation types as the Swift values they bridge to (there is no toll-free bridging here).
 public typealias CFString = String
 public typealias CFURL = URL
@@ -37,7 +37,15 @@ public enum CGImageByteOrderInfo: UInt32, Sendable {
 public final class CGDataProvider: @unchecked Sendable {
     public let data: CFData?
     public init?(data: CFData) { self.data = data }
+    public convenience init?(data: Data) { self.init(data: data as NSData) }
 }
+
+/// The bytes of a `CFData` (an `NSData` here, as on Darwin, so the pointer is stable while the
+/// data lives — Swift's `Data` has no such pointer to hand out).
+public func CFDataGetBytePtr(_ data: CFData) -> UnsafePointer<UInt8>! {
+    data.bytes.assumingMemoryBound(to: UInt8.self)
+}
+public func CFDataGetLength(_ data: CFData) -> Int { data.length }
 
 /// Where R, G, B and A sit in a 4-byte pixel, and whether colour is premultiplied.
 struct PixelLayout: Equatable {
@@ -148,16 +156,14 @@ public final class CGImage: @unchecked Sendable {
     public convenience init?(width: Int, height: Int, bitsPerComponent: Int, bitsPerPixel: Int, bytesPerRow: Int,
                              space: CGColorSpace, bitmapInfo: CGBitmapInfo, provider: CGDataProvider,
                              decode: UnsafePointer<CGFloat>?, shouldInterpolate: Bool, intent: CGColorRenderingIntent) {
-        guard width > 0, height > 0, let data = provider.data, data.count >= bytesPerRow * height,
+        guard width > 0, height > 0, let data = provider.data, data.length >= bytesPerRow * height,
               let layout = PixelLayout(bitsPerComponent: bitsPerComponent, bitsPerPixel: bitsPerPixel,
                                        bitmapInfo: bitmapInfo.rawValue),
               let surface = Self.makeSurface(width: width, height: height) else { return nil }
         let stride = Int(cairo_image_surface_get_stride(surface))
-        data.withUnsafeBytes { bytes in
-            PixelLayout.convert(from: bytes.baseAddress!, layout, srcStride: bytesPerRow,
-                                to: cairo_image_surface_get_data(surface), .cairo, dstStride: stride,
-                                width: width, height: height)
-        }
+        PixelLayout.convert(from: data.bytes, layout, srcStride: bytesPerRow,
+                            to: cairo_image_surface_get_data(surface), .cairo, dstStride: stride,
+                            width: width, height: height)
         cairo_surface_mark_dirty(surface)
         self.init(_surface: surface)
         self.shouldInterpolate = shouldInterpolate

@@ -183,3 +183,81 @@ public func vDSP_vcmprs(_ a: UnsafePointer<Float>, _ ia: vDSP_Stride, _ b: Unsaf
         out += 1
     }
 }
+
+// MARK: Classic real FFT (vDSP_create_fftsetup / vDSP_fft_zrip), as the .wal analyzer uses it
+
+public typealias FFTRadix = Int32
+public typealias FFTDirection = Int32
+public let kFFTRadix2: Int32 = 0
+public let FFT_FORWARD: Int32 = 1
+public let FFT_INVERSE: Int32 = -1
+
+public struct DSPComplex { public var real: Float; public var imag: Float
+    public init(real: Float = 0, imag: Float = 0) { self.real = real; self.imag = imag } }
+public struct DSPSplitComplex {
+    public var realp: UnsafeMutablePointer<Float>
+    public var imagp: UnsafeMutablePointer<Float>
+    public init(realp: UnsafeMutablePointer<Float>, imagp: UnsafeMutablePointer<Float>) { self.realp = realp; self.imagp = imagp }
+}
+
+public final class FFTSetupStorage {
+    let log2n: Int
+    let forward: vDSP_DFT_Setup
+    let inverse: vDSP_DFT_Setup
+    init?(log2n: Int) {
+        let n = vDSP_Length(1 << log2n)
+        guard let f = vDSP_DFT_zop_CreateSetup(nil, n, .FORWARD), let i = vDSP_DFT_zop_CreateSetup(nil, n, .INVERSE) else { return nil }
+        self.log2n = log2n; forward = f; inverse = i
+    }
+}
+public typealias FFTSetup = FFTSetupStorage
+
+public func vDSP_create_fftsetup(_ log2n: vDSP_Length, _ radix: FFTRadix) -> FFTSetup? { FFTSetupStorage(log2n: Int(log2n)) }
+public func vDSP_destroy_fftsetup(_ setup: FFTSetup?) {}
+
+/// Interleaved complex → split complex. `ic` counts floats (2 = consecutive elements), as Apple's.
+public func vDSP_ctoz(_ c: UnsafePointer<DSPComplex>, _ ic: vDSP_Stride, _ z: UnsafePointer<DSPSplitComplex>,
+                      _ iz: vDSP_Stride, _ n: vDSP_Length) {
+    for i in 0..<Int(n) {
+        let element = c[i * ic / 2]
+        z.pointee.realp[i * iz] = element.real
+        z.pointee.imagp[i * iz] = element.imag
+    }
+}
+
+/// Apple's packed in-place real FFT: for N = 2^log2n real samples held as N/2 split pairs, leaves
+/// 2·X[k] for k in 1..<N/2, with 2·X[0] in realp[0] and 2·X[N/2] in imagp[0].
+/// ponytail: forward only (the only direction upstream uses); computed through the complex DFT.
+public func vDSP_fft_zrip(_ setup: FFTSetup, _ c: UnsafePointer<DSPSplitComplex>, _ ic: vDSP_Stride,
+                          _ log2n: vDSP_Length, _ direction: FFTDirection) {
+    let n = 1 << Int(log2n), half = n / 2
+    let split = c.pointee
+    var re = [Float](repeating: 0, count: n), im = [Float](repeating: 0, count: n)
+    for i in 0..<half {
+        re[2 * i] = split.realp[i * ic]
+        re[2 * i + 1] = split.imagp[i * ic]
+    }
+    var outRe = [Float](repeating: 0, count: n), outIm = [Float](repeating: 0, count: n)
+    vDSP_DFT_Execute(setup.forward, re, im, &outRe, &outIm)
+    split.realp[0] = 2 * outRe[0]
+    split.imagp[0] = 2 * outRe[half]
+    for k in 1..<half {
+        split.realp[k * ic] = 2 * outRe[k]
+        split.imagp[k * ic] = 2 * outIm[k]
+    }
+}
+
+/// C[i] = |A[i]| for split complex A.
+public func vDSP_zvabs(_ a: UnsafePointer<DSPSplitComplex>, _ ia: vDSP_Stride, _ c: UnsafeMutablePointer<Float>,
+                       _ ic: vDSP_Stride, _ n: vDSP_Length) {
+    for i in 0..<Int(n) {
+        let r = a.pointee.realp[i * ia], m = a.pointee.imagp[i * ia]
+        c[i * ic] = (r * r + m * m).squareRoot()
+    }
+}
+
+/// C[i] = A[i] · B
+public func vDSP_vsmul(_ a: UnsafePointer<Float>, _ ia: vDSP_Stride, _ b: UnsafePointer<Float>,
+                       _ c: UnsafeMutablePointer<Float>, _ ic: vDSP_Stride, _ n: vDSP_Length) {
+    for i in 0..<Int(n) { c[i * ic] = a[i * ia] * b.pointee }
+}

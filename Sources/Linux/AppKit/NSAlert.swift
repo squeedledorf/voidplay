@@ -29,6 +29,12 @@ public final class NSAlert {
     private static var loop: OpaquePointer?
 
     @discardableResult
+    /// A sheet is a modal dialog over the window here (GTK dialogs are already transient for it).
+    public func beginSheetModal(for window: NSWindow, completionHandler handler: ((NSApplication.ModalResponse) -> Void)? = nil) {
+        let response = runModal()
+        handler?(response)
+    }
+
     public func runModal() -> NSApplication.ModalResponse {
         guard NSApplication.shared.isRunning else {
             let detail = informativeText.isEmpty ? "" : ": \(informativeText)"

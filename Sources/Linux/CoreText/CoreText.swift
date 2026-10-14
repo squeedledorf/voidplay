@@ -21,47 +21,151 @@ private func locked<T>(_ body: () -> T) -> T {
 
 // MARK: Fonts
 
-public final class CTFont: @unchecked Sendable {
-    let description: OpaquePointer
-    public let size: CGFloat
+/// A font request — family, size, weight, slant — realised through Pango when text is laid out.
+/// This is AppKit's NSFont too (AppKit aliases it), as the two are toll-free bridged on macOS.
+public final class CTFont: @unchecked Sendable, Hashable {
+    public struct Weight: RawRepresentable, Hashable, Sendable, Comparable {
+        public let rawValue: CGFloat
+        public init(rawValue: CGFloat) { self.rawValue = rawValue }
+        public init(_ rawValue: CGFloat) { self.rawValue = rawValue }
+        public static let ultraLight = Weight(-0.8), thin = Weight(-0.6), light = Weight(-0.4)
+        public static let regular = Weight(0), medium = Weight(0.23), semibold = Weight(0.3)
+        public static let bold = Weight(0.4), heavy = Weight(0.56), black = Weight(0.62)
+        public static func < (a: Weight, b: Weight) -> Bool { a.rawValue < b.rawValue }
 
-    init(description: OpaquePointer, size: CGFloat) {
-        self.description = description
-        self.size = size
-        pango_font_description_set_absolute_size(description, Double(size) * Double(PANGO_SCALE))
+        /// Pango's 100–900 scale.
+        var pango: Int32 {
+            switch rawValue {
+            case ..<(-0.7): return 100
+            case ..<(-0.5): return 200
+            case ..<(-0.2): return 300
+            case ..<0.1: return 400
+            case ..<0.26: return 500
+            case ..<0.35: return 600
+            case ..<0.5: return 700
+            case ..<0.6: return 800
+            default: return 900
+            }
+        }
+
+        init(pango: Int32) {
+            let steps: [(Int32, Weight)] = [(150, .ultraLight), (250, .thin), (350, .light), (450, .regular),
+                                            (550, .medium), (650, .semibold), (750, .bold), (850, .heavy)]
+            self = steps.first { pango < $0.0 }?.1 ?? .black
+        }
+    }
+
+    public let familyName: String?
+    /// The family, with "-Bold"/"-Italic"/"-BoldItalic" for a styled face (AppKit's names are
+    /// PostScript names, which carry the style the same way).
+    public let fontName: String
+    public let pointSize: CGFloat
+    public let weight: Weight
+    public let isItalic: Bool
+    public let isMonospaced: Bool
+    public var size: CGFloat { pointSize }
+    let description: OpaquePointer
+
+    public init(family: String, size: CGFloat, weight: Weight = .regular, italic: Bool = false, monospaced: Bool = false) {
+        familyName = family
+        pointSize = size > 0 ? size : 12
+        self.weight = weight
+        isItalic = italic
+        isMonospaced = monospaced
+        let bold = weight >= .semibold
+        let style = (bold ? "Bold" : "") + (italic ? "Italic" : "")
+        fontName = style.isEmpty ? family : "\(family)-\(style)"
+        description = pango_font_description_new()
+        pango_font_description_set_family(description, family)
+        pango_font_description_set_absolute_size(description, Double(pointSize) * Double(PANGO_SCALE))
+        pango_font_description_set_weight(description, PangoWeight(UInt32(weight.pango)))
+        if italic { pango_font_description_set_style(description, PANGO_STYLE_ITALIC) }
     }
 
     deinit { pango_font_description_free(description) }
 
-    struct Metrics { let ascent: CGFloat; let descent: CGFloat; let height: CGFloat }
+    /// A copy of the Pango description; the caller frees it.
+    public func makeDescription() -> OpaquePointer { pango_font_description_copy(description) }
 
-    var metrics: Metrics {
-        locked {
-            let metrics = pango_context_get_metrics(fontContext, description, nil)
-            defer { pango_font_metrics_unref(metrics) }
-            let scale = CGFloat(PANGO_SCALE)
-            return Metrics(ascent: CGFloat(pango_font_metrics_get_ascent(metrics)) / scale,
-                           descent: CGFloat(pango_font_metrics_get_descent(metrics)) / scale,
-                           height: CGFloat(pango_font_metrics_get_height(metrics)) / scale)
+    public func withSize(_ size: CGFloat) -> CTFont {
+        CTFont(family: familyName ?? fontName, size: size, weight: weight, italic: isItalic, monospaced: isMonospaced)
+    }
+
+    public func with(weight: Weight? = nil, italic: Bool? = nil) -> CTFont {
+        CTFont(family: familyName ?? fontName, size: pointSize, weight: weight ?? self.weight,
+               italic: italic ?? isItalic, monospaced: isMonospaced)
+    }
+
+    public static func == (a: CTFont, b: CTFont) -> Bool {
+        a.fontName == b.fontName && a.pointSize == b.pointSize && a.weight == b.weight
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(fontName); hasher.combine(pointSize); hasher.combine(weight)
+    }
+
+    public struct Metrics { public let ascent: CGFloat; public let descent: CGFloat; public let height: CGFloat }
+
+    public private(set) lazy var metrics: Metrics = locked {
+        guard let metrics = pango_context_get_metrics(fontContext, description, nil) else {
+            return Metrics(ascent: pointSize * 0.8, descent: pointSize * 0.2, height: pointSize * 1.2)
         }
+        defer { pango_font_metrics_unref(metrics) }
+        let scale = CGFloat(PANGO_SCALE)
+        return Metrics(ascent: CGFloat(pango_font_metrics_get_ascent(metrics)) / scale,
+                       descent: CGFloat(pango_font_metrics_get_descent(metrics)) / scale,
+                       height: CGFloat(pango_font_metrics_get_height(metrics)) / scale)
     }
 
     /// The family fontconfig actually resolved this request to (e.g. "Liberation Sans" for Arial).
-    var resolvedFamily: String {
+    var resolvedFamily: String { locked { Self.resolve(description) } }
+
+    /// Call with the lock held.
+    static func resolve(_ description: OpaquePointer) -> String {
+        guard let font = pango_context_load_font(fontContext, description) else { return "" }
+        defer { g_object_unref(UnsafeMutableRawPointer(font)) }
+        let described = pango_font_describe(font)
+        defer { pango_font_description_free(described) }
+        return pango_font_description_get_family(described).map { String(cString: $0) } ?? ""
+    }
+
+    /// Whether this system has a face for `family`, its own or one fontconfig aliases to it
+    /// (Arial → Liberation Sans) — false when the request would land on the generic fallback,
+    /// where AppKit answers a missing family with nil.
+    public static func familyIsAvailable(_ family: String) -> Bool {
         locked {
-            guard let font = pango_context_load_font(fontContext, description) else { return "" }
-            defer { g_object_unref(UnsafeMutableRawPointer(font)) }
-            let described = pango_font_describe(font)
-            defer { pango_font_description_free(described) }
-            return pango_font_description_get_family(described).map { String(cString: $0) } ?? ""
+            func resolved(_ name: String) -> String {
+                let description = pango_font_description_new()!
+                defer { pango_font_description_free(description) }
+                pango_font_description_set_family(description, name)
+                return resolve(description)
+            }
+            if fallbackFamily == nil { fallbackFamily = resolved("voidplay-no-such-family") }
+            if availableFamilies == nil {
+                var families: UnsafeMutablePointer<UnsafeMutablePointer<PangoFontFamily>?>?
+                var count: Int32 = 0
+                pango_font_map_list_families(fontMap, &families, &count)
+                defer { g_free(families) }
+                availableFamilies = Set((0..<Int(count)).compactMap { index in
+                    families?[index].flatMap { pango_font_family_get_name($0) }.map { String(cString: $0).lowercased() }
+                })
+            }
+            if availableFamilies?.contains(family.lowercased()) == true { return true }
+            return resolved(family) != fallbackFamily
         }
     }
+
+    nonisolated(unsafe) static var fallbackFamily: String?
+    nonisolated(unsafe) static var availableFamilies: Set<String>?
 }
 
 /// "Family Bold Italic", as CoreText takes full names; Pango reads the trailing style words.
 public func CTFontCreateWithName(_ name: CFString, _ size: CGFloat, _ matrix: UnsafePointer<CGAffineTransform>?) -> CTFont {
     let description = pango_font_description_from_string(name)!
-    return CTFont(description: description, size: size > 0 ? size : 12)
+    defer { pango_font_description_free(description) }
+    let family = pango_font_description_get_family(description).map { String(cString: $0) } ?? name
+    return CTFont(family: family, size: size, weight: CTFont.Weight(pango: Int32(pango_font_description_get_weight(description).rawValue)),
+                  italic: pango_font_description_get_style(description) != PANGO_STYLE_NORMAL)
 }
 
 public func CTFontCopyFamilyName(_ font: CTFont) -> CFString { font.resolvedFamily }
@@ -78,6 +182,8 @@ public func CTFontGetSize(_ font: CTFont) -> CGFloat { font.size }
 public let kCTFontAttributeName: CFString = "NSFont"
 public let kCTForegroundColorAttributeName: CFString = "CTForegroundColor"
 public let kCTUnderlineStyleAttributeName: CFString = "NSUnderline"
+/// True: the line draws in the context's fill colour rather than a colour attribute.
+public let kCTForegroundColorFromContextAttributeName = NSAttributedString.Key("CTForegroundColorFromContext")
 
 public struct CTUnderlineStyle: OptionSet, Sendable {
     public let rawValue: Int32
@@ -93,12 +199,14 @@ public final class CTLine: @unchecked Sendable {
     let font: CTFont?
     let color: CGColor?
     let underline: Bool
+    let colorFromContext: Bool
 
-    init(text: String, font: CTFont?, color: CGColor?, underline: Bool) {
+    init(text: String, font: CTFont?, color: CGColor?, underline: Bool, colorFromContext: Bool = false) {
         self.text = text
         self.font = font
         self.color = color
         self.underline = underline
+        self.colorFromContext = colorFromContext
     }
 
     /// A layout for this line on the shared context (call with the lock held).
@@ -123,7 +231,8 @@ public func CTLineCreateWithAttributedString(_ string: NSAttributedString) -> CT
     return CTLine(text: string.string,
                   font: attributes[NSAttributedString.Key(kCTFontAttributeName)] as? CTFont,
                   color: attributes[NSAttributedString.Key(kCTForegroundColorAttributeName)] as? CGColor,
-                  underline: underline)
+                  underline: underline,
+                  colorFromContext: attributes[kCTForegroundColorFromContextAttributeName] as? Bool ?? false)
 }
 
 /// Advance width; ascent/descent/leading of the line's font when asked.
@@ -154,7 +263,7 @@ public func CTLineDraw(_ line: CTLine, _ context: CGContext) {
         cairo_save(cr)
         cairo_translate(cr, Double(context.textPosition.x), Double(context.textPosition.y))
         cairo_scale(cr, 1, -1)
-        let c = (line.color ?? CGColor(gray: 0, alpha: 1)).rgba
+        let c = line.colorFromContext ? context._fillRGBA : (line.color ?? CGColor(gray: 0, alpha: 1)).rgba
         cairo_set_source_rgba(cr, Double(c.r), Double(c.g), Double(c.b), Double(c.a))
         pango_cairo_update_context(cr, fontContext)
         let options = cairo_font_options_create()
@@ -207,6 +316,9 @@ public func CTFontManagerRegisterGraphicsFont(_ font: CGFont, _ error: UnsafeMut
     locked {
         guard FcConfigAppFontAddFile(nil, font.path) != 0 else { return false }
         pango_fc_font_map_config_changed(cpangofc_fc_font_map(fontMap))
+        // AppKit's string drawing lays out on the main thread's default map.
+        pango_fc_font_map_config_changed(cpangofc_fc_font_map(pango_cairo_font_map_get_default()))
+        CTFont.availableFamilies = nil
         return true
     }
 }
@@ -215,9 +327,7 @@ public typealias CFError = NSError
 
 public func CTFontCreateWithGraphicsFont(_ font: CGFont, _ size: CGFloat, _ matrix: UnsafePointer<CGAffineTransform>?,
                                          _ attributes: Any?) -> CTFont {
-    let description = pango_font_description_new()!
-    pango_font_description_set_family(description, font.family ?? "Sans")
-    return CTFont(description: description, size: size > 0 ? size : 12)
+    CTFont(family: font.family ?? "Sans", size: size)
 }
 
 public func CTFontManagerCopyAvailableFontFamilyNames() -> CFArray {
