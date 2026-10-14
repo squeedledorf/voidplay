@@ -124,7 +124,11 @@ public final class CGContext: @unchecked Sendable {
 
     /// Bitmap memory, in the layout the context was created with.
     public var data: UnsafeMutableRawPointer? {
-        if let mirror { mirrorMayBeAhead = true; return mirror }
+        if let mirror {
+            if cairoAhead { syncMirrorFromCairo() }
+            mirrorMayBeAhead = true
+            return mirror
+        }
         guard let surface else { return nil }
         cairo_surface_flush(surface)
         return UnsafeMutableRawPointer(cairo_image_surface_get_data(surface))
@@ -145,7 +149,19 @@ public final class CGContext: @unchecked Sendable {
     }
 
     private func didDraw() {
+        guard mirror != nil else { return }
+        // Memory we own is only reachable through `data`, so it is brought up to date there,
+        // once, instead of after every drawing call (a full-bitmap conversion each time).
+        if ownedMemory != nil { cairoAhead = true; return }
+        syncMirrorFromCairo()
+    }
+
+    /// Set when Cairo has pixels the mirror (owned memory) does not yet show.
+    private var cairoAhead = false
+
+    private func syncMirrorFromCairo() {
         guard let mirror, let mirrorLayout, let surface else { return }
+        cairoAhead = false
         cairo_surface_flush(surface)
         PixelLayout.convert(from: cairo_image_surface_get_data(surface), .cairo,
                             srcStride: Int(cairo_image_surface_get_stride(surface)),

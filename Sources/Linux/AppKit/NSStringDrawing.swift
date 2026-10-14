@@ -173,6 +173,12 @@ enum TextLayout {
         let cr = ctx._cr
         let layout = make(text, attributes: attributes, width: wrapWidth, cr: cr)
         defer { g_object_unref(gcast(layout)) }
+        if wrapWidth != nil, rect.height > 0 {
+            // Only whole lines that fit, the last ending in "…": AppKit draws no partial line, and
+            // a list row (one line tall) then reads as its title rather than a cut-off fragment.
+            pango_layout_set_height(layout, Int32(rect.height * CGFloat(PANGO_SCALE)))
+            pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_END)
+        }
         let size = size(of: layout)
         ctx.saveGState()
         if rect.height > 0, wrapWidth != nil { ctx.clip(to: rect) }

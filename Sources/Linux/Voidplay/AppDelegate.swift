@@ -22,14 +22,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AudioEngineDelegate {
             windowManager.snapToDefaultPositions()
         }
 
-        // Load a skin from the environment (for testing), as upstream's NULLPLAYER_SKIN.
-        #if DEBUG
+        // Load a skin from the environment (for testing), as upstream's NULLPLAYER_SKIN; release
+        // builds honour it too, so tests can measure the optimised build.
         if let skinPath = ProcessInfo.processInfo.environment["VOIDPLAY_SKIN"] {
             let url = URL(fileURLWithPath: skinPath)
             if url.pathExtension.lowercased() == "wmz" { windowManager.loadWMPSkin(from: url) }
             else { windowManager.loadSkin(from: url) }
         }
-        #endif
 
         let files = CommandLine.arguments.dropFirst()
             .filter { !$0.hasPrefix("-") }

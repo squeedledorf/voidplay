@@ -31,6 +31,7 @@ final class MpvPlayer {
         observe("pause", MPV_FORMAT_FLAG)
         observe("playlist-pos", MPV_FORMAT_INT64)
         observe("metadata", MPV_FORMAT_NODE)
+        observe("audio-bitrate", MPV_FORMAT_DOUBLE)
         let thread = Thread { [weak self] in self?.eventLoop() }
         thread.name = "mpv-events"
         eventThread = thread

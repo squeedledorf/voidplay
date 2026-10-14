@@ -587,6 +587,10 @@ class AudioEngine {
             if Date().timeIntervalSince(lastTimeReport) >= 0.25 { reportTime() }
         case .property("duration", let value):
             mpvDuration = value as? Double
+        case .property("audio-bitrate", let value):
+            // Streams and some formats state no bitrate up front; mpv measures it once audio flows.
+            guard let bps = value as? Double, bps > 0, let track = currentTrack, track.bitrate == nil else { return }
+            currentTrack = track.withFormat(bitrate: Int(bps / 1000), sampleRate: track.sampleRate)
         case .property("metadata", let value):
             guard RadioManager.shared.isActive, let map = value as? [String: Any] else { return }
             RadioManager.shared.streamDidReceiveMetadata(map.compactMapValues { $0 as? String })

@@ -1101,7 +1101,9 @@ class SkinRenderer {
         if let textImage = skin.text {
             // Draw each character from skin font
             var xPos = rect.minX
-            let yPos = rect.minY + (rect.height - SkinElements.TextFont.charHeight) / 2
+            // Top-aligned, as Winamp draws it: the kbps/kHz labels in the skin's own art sit on
+            // the same rows, and centring in the 9px box dropped the digits 1.5px below them.
+            let yPos = rect.minY
             
             for char in text.uppercased() {
                 let charRect = SkinElements.TextFont.character(char)
@@ -1136,7 +1138,7 @@ class SkinRenderer {
         let totalWidth = textWidth + spacing  // Total width of one cycle
         
         if let textImage = skin.text {
-            let yPos = rect.minY + (rect.height - SkinElements.TextFont.charHeight) / 2
+            let yPos = rect.minY  // top-aligned like drawSmallText (Winamp's rows)
             
             // Draw text twice for seamless circular scroll
             for pass in 0..<2 {
