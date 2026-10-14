@@ -22,3 +22,26 @@ final class YouTubeLinksTests: XCTestCase {
         XCTAssertNil(YouTubeLinks.track(["id": "y", "title": "[Deleted video]"]))
     }
 }
+
+final class M3UEntriesTests: XCTestCase {
+    func testExtinfTitlesAndLengthsCarryOver() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("vp-m3u-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("list.m3u")
+        try """
+        #EXTM3U
+        #EXTINF:251,Band - Song, With Comma
+        https://www.youtube.com/watch?v=abc123
+        #EXTINF:0,Local
+        /music/local.flac
+        """.write(to: file, atomically: true, encoding: .utf8)
+        let entries = try XCTUnwrap(Playlist.m3uEntries(from: file))
+        XCTAssertEqual(entries.count, 2)
+        XCTAssertEqual(entries[0].url.absoluteString, "https://www.youtube.com/watch?v=abc123")
+        XCTAssertEqual(entries[0].title, "Band - Song, With Comma")
+        XCTAssertEqual(entries[0].duration, 251)
+        XCTAssertTrue(entries[1].url.isFileURL)
+        XCTAssertNil(entries[1].duration, "0 means unknown")
+    }
+}

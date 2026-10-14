@@ -1748,10 +1748,21 @@ class PlaylistView: NSView {
         removeAll(sender)
     }
 
+    /// Where saved playlists live by default (`<data dir>/Playlists`), so Save and Load open on
+    /// the same shelf of lists.
+    private static var playlistsDirectory: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser
+        let dir = base.appendingPathComponent(ClientIdentity.dataDirectoryName).appendingPathComponent("Playlists")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
     @objc private func savePlaylist(_ sender: Any?) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.init(filenameExtension: "m3u")!]
         panel.nameFieldStringValue = "playlist.m3u"
+        panel.directoryURL = Self.playlistsDirectory
 
         if panel.runModal() == .OK, let url = panel.url {
             let tracks = WindowManager.shared.audioEngine.playlist
@@ -1760,7 +1771,8 @@ class PlaylistView: NSView {
             for track in tracks {
                 let duration = Int(track.duration ?? 0)
                 content += "#EXTINF:\(duration),\(track.displayTitle)\n"
-                content += "\(track.url.path)\n"
+                // A stream keeps its whole address; `.path` alone saved a YouTube link as "/watch".
+                content += "\(track.url.isFileURL ? track.url.path : track.url.absoluteString)\n"
             }
 
             try? content.write(to: url, atomically: true, encoding: .utf8)
@@ -1770,8 +1782,22 @@ class PlaylistView: NSView {
     @objc private func loadPlaylist(_ sender: Any?) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.init(filenameExtension: "m3u")!, .init(filenameExtension: "m3u8")!]
+        panel.directoryURL = Self.playlistsDirectory
 
         if panel.runModal() == .OK, let url = panel.url {
+            // Streams with #EXTINF titles load as those tracks straight away (local files still
+            // read their own tags); a saved YouTube list then needs no lookup per video.
+            if let entries = Playlist.m3uEntries(from: url),
+               entries.contains(where: { !$0.url.isFileURL && $0.title != nil }) {
+                let tracks = entries.map { entry -> Track in
+                    guard !entry.url.isFileURL, let title = entry.title else { return Track(lightweightURL: entry.url) }
+                    return Track(url: entry.url, title: title, duration: entry.duration)
+                }
+                WindowManager.shared.audioEngine.clearPlaylist()
+                WindowManager.shared.audioEngine.loadTracks(tracks)
+                needsDisplay = true
+                return
+            }
             // `Playlist.resolveEntry` rather than a local `URL(string:)` test: that initialiser
             // accepts a bare filename and returns a schemeless URL, so the relative branch here
             // was dead code and every relative entry loaded as something unplayable.

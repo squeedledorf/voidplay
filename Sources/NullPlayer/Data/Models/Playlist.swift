@@ -103,6 +103,29 @@ extension Playlist {
         return Playlist(name: name, trackURLs: trackURLs)
     }
     
+    /// An M3U's entries with the title and length its `#EXTINF` lines give them, so a list of
+    /// streams (YouTube videos) loads as titled tracks without asking each source again.
+    static func m3uEntries(from url: URL) -> [(url: URL, title: String?, duration: Double?)]? {
+        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        let baseURL = url.deletingLastPathComponent()
+        var entries: [(url: URL, title: String?, duration: Double?)] = []
+        var pending: (title: String?, duration: Double?)?
+        for line in content.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.uppercased().hasPrefix("#EXTINF:") {
+                let info = trimmed.dropFirst("#EXTINF:".count)
+                let comma = info.firstIndex(of: ",")
+                let seconds = Double(comma.map { info[..<$0] } ?? info).flatMap { $0 > 0 ? $0 : nil }
+                let title = comma.map { String(info[info.index(after: $0)...]) }.flatMap { $0.isEmpty ? nil : $0 }
+                pending = (title, seconds)
+            } else if let entry = resolveEntry(trimmed, relativeTo: baseURL) {
+                entries.append((entry, pending?.title, pending?.duration))
+                pending = nil
+            }
+        }
+        return entries
+    }
+
     /// Export playlist to M3U format
     func toM3U() -> String {
         var lines = ["#EXTM3U"]
