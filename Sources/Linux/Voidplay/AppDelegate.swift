@@ -40,7 +40,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AudioEngineDelegate {
         if !files.isEmpty {
             windowManager.audioEngine.loadFiles(files)
             windowManager.audioEngine.play()
+        } else {
+            PlaylistMemory.restore(into: windowManager.audioEngine)
         }
+
+        // Linux has no Dock to bring a windowless player back, so closing the player's own window
+        // (the compositor's close, or a WMP skin's) quits, as the classic skin's close button does.
+        // The equalizer and playlist windows still just close.
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: nil,
+                                               queue: .main) { note in
+            MainActor.assumeIsolated {
+                guard let window = note.object as? NSWindow else { return }
+                let wm = WindowManager.shared
+                if window === wm.mainWindowController?.window || window === wm.wmpMainWindowController?.window {
+                    NSApp.terminate(nil)
+                }
+            }
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        PlaylistMemory.save(windowManager.audioEngine)
     }
 
     // MARK: AudioEngineDelegate (as upstream's AppDelegate, classic windows only)
@@ -56,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AudioEngineDelegate {
 
     func audioEngineDidChangeTrack(_ track: Track?) {
         windowManager.mainWindowController?.updateTrackInfo(track)
+        PlaylistMemory.scheduleSave(windowManager.audioEngine)
     }
 
     func audioEngineDidUpdateSpectrum(_ levels: [Float]) {
@@ -64,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AudioEngineDelegate {
 
     func audioEngineDidChangePlaylist() {
         windowManager.playlistWindowController?.reloadPlaylist()
+        PlaylistMemory.scheduleSave(windowManager.audioEngine)
     }
 
     func audioEngineDidFailToLoadTrack(_ track: Track, error: Error) {

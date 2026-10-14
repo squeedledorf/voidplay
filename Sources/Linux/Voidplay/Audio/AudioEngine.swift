@@ -773,6 +773,16 @@ class AudioEngine {
 
     var mpvAudioDevices: [[String: Any]] { mpv.node("audio-device-list") as? [[String: Any]] ?? [] }
 
+    /// The saved playlist at launch (PlaylistMemory): loaded with its current track, not playing.
+    func restorePlaylist(_ tracks: [Track], currentIndex index: Int) {
+        playlist = tracks
+        shuffle.clear()
+        currentIndex = tracks.indices.contains(index) ? index : (tracks.isEmpty ? -1 : 0)
+        currentTrack = currentIndex >= 0 ? playlist[currentIndex] : nil
+        delegate?.audioEngineDidChangePlaylist()
+        enrichPlaylistDurationsAsync(for: tracks.map(\.id))
+    }
+
     // MARK: Playback options upstream's settings and WMP skins read
 
     /// WMP's SRS WOW: stereo widening and TruBass, as mpv filters (see `applyAudioFilters`).
