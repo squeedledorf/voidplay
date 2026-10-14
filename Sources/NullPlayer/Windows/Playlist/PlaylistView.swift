@@ -98,7 +98,7 @@ class PlaylistView: NSView {
 
         static let classic = PlaylistChrome(titleBarHeight: 20,
                                             bottomBarHeight: SkinElements.Playlist.controlBarHeight,
-                                            leftBorder: 12, rightBorder: 12)
+                                            leftBorder: 12, rightBorder: 20)
     }
 
     /// The window frame the hosting skin lends this playlist, when it lends one — a `.wmz` skin that
@@ -551,7 +551,8 @@ class PlaylistView: NSView {
             drawWinampModernChrome(style: style, context: context, bounds: drawBounds, isActive: isActive)
         } else {
             renderer.drawPlaylistWindow(in: context, bounds: drawBounds, isActive: isActive,
-                                        pressedButton: pressedButton, scrollPosition: scrollPosition)
+                                        pressedButton: pressedButton, scrollPosition: scrollPosition,
+                                        scrollbarPressed: isDraggingScrollbar)
         }
 
         // Draw track list in the content area
@@ -1183,9 +1184,12 @@ class PlaylistView: NSView {
         return buttons.first { SkinRenderer.playlistBarButtonRect($0, width: effectiveSize.width)?.contains(point) == true }
     }
 
-    /// Check if point hits the scrollbar (disabled - no scrollbar widget)
+    /// The classic playlist's scrollbar: its right border column between title and control bar.
     private func hitTestScrollbar(at skinPoint: NSPoint) -> Bool {
-        return false
+        guard WindowManager.shared.hostedSurfaceStyle == nil else { return false }
+        let size = effectiveWindowSize
+        return NSRect(x: size.width - Layout.rightBorder, y: Layout.titleBarHeight, width: Layout.rightBorder,
+                      height: size.height - Layout.titleBarHeight - Layout.bottomBarHeight).contains(skinPoint)
     }
 
     /// Check if point hits the track list

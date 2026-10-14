@@ -2493,7 +2493,8 @@ class SkinRenderer {
     
     /// Draw the complete playlist window using skin sprites
     func drawPlaylistWindow(in context: CGContext, bounds: NSRect, isActive: Bool,
-                            pressedButton: PlaylistButtonType?, scrollPosition: CGFloat) {
+                            pressedButton: PlaylistButtonType?, scrollPosition: CGFloat,
+                            scrollbarPressed: Bool = false) {
         // Fill background with playlist colors first
         skin.playlistColors.normalBackground.setFill()
         context.fill(bounds)
@@ -2501,9 +2502,8 @@ class SkinRenderer {
         // Draw title bar (without custom text)
         drawPlaylistTitleBar(in: context, bounds: bounds, isActive: isActive, pressedButton: pressedButton)
         
-        // Draw side borders
-        drawPlaylistSideBorders(in: context, bounds: bounds)
-        
+        drawClassicPlaylistSides(in: context, bounds: bounds, scrollPosition: scrollPosition,
+                                 scrollbarPressed: scrollbarPressed)
         drawPlaylistBottomBar(in: context, bounds: bounds, pressedButton: pressedButton)
         
         // Scrollbar removed - users scroll with trackpad/wheel
@@ -2785,6 +2785,34 @@ class SkinRenderer {
         drawPlaylistStyleSideBorders(in: context, bounds: bounds,
                                      titleHeight: SkinElements.Playlist.titleHeight,
                                      bottomHeight: SkinElements.Playlist.controlBarHeight)
+    }
+
+    /// The classic playlist's sides as Winamp draws them: the 12px left tile and the 20px right
+    /// tile carrying the scrollbar groove, both between the title bar and the control bar, and the
+    /// scrollbar thumb placed by `scrollPosition` (0 top, 1 bottom). Without pledit.bmp, the
+    /// shared side borders.
+    private func drawClassicPlaylistSides(in context: CGContext, bounds: NSRect, scrollPosition: CGFloat,
+                                          scrollbarPressed: Bool) {
+        guard let pleditImage = skin.pledit else { drawPlaylistSideBorders(in: context, bounds: bounds); return }
+        let top = SkinElements.Playlist.titleHeight
+        let bottom = (bounds.height - SkinElements.Playlist.controlBarHeight).rounded(.down)
+        let tileHeight: CGFloat = 29
+        var y = top
+        while y < bottom {
+            let height = min(tileHeight, bottom - y)
+            drawSprite(from: pleditImage, sourceRect: SkinElements.Playlist.leftSideTile,
+                       to: NSRect(x: 0, y: y, width: 12, height: height), in: context)
+            drawSprite(from: pleditImage, sourceRect: SkinElements.Playlist.rightSideTile,
+                       to: NSRect(x: bounds.width - 20, y: y, width: 20, height: height), in: context)
+            y += tileHeight
+        }
+        let thumbHeight: CGFloat = 18
+        let travel = max(0, bottom - top - thumbHeight)
+        let thumbY = (top + travel * min(1, max(0, scrollPosition))).rounded()
+        drawSprite(from: pleditImage,
+                   sourceRect: scrollbarPressed ? SkinElements.Playlist.scrollbarThumbPressed
+                                                : SkinElements.Playlist.scrollbarThumbNormal,
+                   to: NSRect(x: bounds.width - 15, y: thumbY, width: 8, height: thumbHeight), in: context)
     }
 
     /// The classic playlist's bottom control bar from pledit.bmp: the 125px left corner (ADD, REM,
