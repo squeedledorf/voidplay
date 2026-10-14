@@ -776,6 +776,30 @@ class SkinRenderer {
     /// - Parameters:
     ///   - levels: Array of frequency levels (0-1), typically 75 bands from FFT
     ///   - context: Graphics context to draw into
+    /// Winamp's built-in oscilloscope ("lines" style): the waveform across the 75x16 display,
+    /// each step joined to the next by a vertical run, coloured from viscolor.txt's oscilloscope
+    /// entries (18 brightest at the centre line, 22 at the edges).
+    func drawOscilloscope(samples: [Float], in context: CGContext) {
+        let area = SkinElements.Visualization.displayArea
+        let colors = skin.visColors
+        guard colors.count >= 23, !samples.isEmpty else { return }
+        let rows = Int(area.height), columns = Int(area.width)
+        func row(_ x: Int) -> Int {
+            let sample = samples[min(samples.count - 1, x * samples.count / columns)]
+            return min(rows - 1, max(0, Int(((1 - CGFloat(sample)) / 2 * CGFloat(rows)).rounded(.down))))
+        }
+        var previous = row(0)
+        for x in 0..<columns {
+            let current = row(x)
+            for y in min(previous, current)...max(previous, current) {
+                let distance = abs(CGFloat(y) - CGFloat(rows - 1) / 2)
+                colors[18 + min(4, Int(distance / (CGFloat(rows) / 10)))].setFill()
+                context.fill(CGRect(x: area.minX + CGFloat(x), y: area.minY + CGFloat(y), width: 1, height: 1))
+            }
+            previous = current
+        }
+    }
+
     func drawSpectrumAnalyzer(levels: [Float], in context: CGContext) {
         let displayArea = SkinElements.Visualization.displayArea
         let barCount = SkinElements.Visualization.barCount

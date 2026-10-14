@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 enum MainWindowVisMode: String, CaseIterable {
     case none = "None"               // No main-window visualization; leaves skin artwork visible
     case spectrum = "Spectrum"       // Classic 19-bar spectrum analyzer (CGContext)
+    case oscilloscope = "Oscilloscope" // Winamp's built-in oscilloscope in the skin's viscolor (CGContext)
     case cava = "Cava"               // Cava vDSP spectrum analyzer (CoreGraphics)
     case visClassicExact = "vis_classic" // Exact vis_classic port (CPU frame in Metal overlay)
     case fire = "Fire"               // GPU flame simulation (Metal overlay)
@@ -28,6 +29,7 @@ enum MainWindowVisMode: String, CaseIterable {
     /// Shared user-facing order for visualization click cycling.
     static let visualizationOrder: [MainWindowVisMode] = [
         .spectrum,
+        .oscilloscope,
         .cava,
         .enhanced,
         .ultra,
@@ -49,7 +51,7 @@ enum MainWindowVisMode: String, CaseIterable {
     /// Map to the corresponding SpectrumQualityMode for the Metal overlay
     var spectrumQualityMode: SpectrumQualityMode? {
         switch self {
-        case .none, .spectrum, .cava: return nil
+        case .none, .spectrum, .oscilloscope, .cava: return nil
         case .visClassicExact: return .visClassicExact
         case .fire: return .flame
         case .enhanced: return .enhanced
@@ -1236,6 +1238,11 @@ class MainWindowView: NSView {
             if isFullRedraw || dirtySkin.intersects(visArea) {
                 renderer.drawSpectrumAnalyzer(levels: spectrumLevels, in: context)
             }
+        } else if mainVisMode == .oscilloscope {
+            let visArea = SkinElements.Visualization.displayArea
+            if isFullRedraw || dirtySkin.intersects(visArea) {
+                renderer.drawOscilloscope(samples: WindowManager.shared.audioEngine.pcmData, in: context)
+            }
         }
         // Note: In non-spectrum modes, the Metal overlay renders on top of this area
 
@@ -1350,8 +1357,8 @@ class MainWindowView: NSView {
             metalOverlay?.updateSpectrum(levels)
         }
         
-        // Only redraw the visualization area for performance (spectrum mode)
-        if mainVisMode == .spectrum {
+        // Only redraw the visualization area for performance (CG-drawn modes)
+        if mainVisMode == .spectrum || mainVisMode == .oscilloscope {
             setNeedsDisplay(skinRectToViewRect(SkinElements.Visualization.displayArea))
         }
     }
