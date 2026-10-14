@@ -115,6 +115,16 @@ let package = Package(
             path: "Tests/Linux/SourceTransformTests"
         ),
         .testTarget(
+            name: "JavaScriptCoreTests",
+            dependencies: ["JavaScriptCore"],
+            path: "Tests/Linux/JavaScriptCoreTests"
+        ),
+        .testTarget(
+            name: "CoreTextTests",
+            dependencies: ["CoreText", "CoreGraphics"],
+            path: "Tests/Linux/CoreTextTests"
+        ),
+        .testTarget(
             name: "AppKitTests",
             dependencies: ["AppKit"],
             path: "Tests/Linux/AppKitTests"

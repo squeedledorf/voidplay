@@ -107,3 +107,88 @@ final class AlphaOnlyContextTests: XCTestCase {
         XCTAssertEqual(bytes, [255, 255, 0, 0, 255, 255, 0, 0])
     }
 }
+
+final class MaskClipTests: XCTestCase {
+    /// A gray mask clips by brightness: white keeps, black removes, for the paints that follow.
+    func testGrayMaskClipsLaterFills() throws {
+        // 2×1 mask: left white (keep), right black (clip away).
+        let pixels: [UInt8] = [255, 0]
+        let mask = try XCTUnwrap(CGImage(width: 2, height: 1, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: 2,
+                                         space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: 0),
+                                         provider: CGDataProvider(data: Data(pixels))!, decode: nil,
+                                         shouldInterpolate: false, intent: .defaultIntent))
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: 2, height: 1, bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue))
+        ctx.saveGState()
+        ctx.clip(to: CGRect(x: 0, y: 0, width: 2, height: 1), mask: mask)
+        ctx.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: 2, height: 1))
+        ctx.restoreGState()
+        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 1, alpha: 1))
+        let data = try XCTUnwrap(ctx.makeImage()?.dataProvider?.data)
+        XCTAssertEqual(data[3], 255, "left pixel painted")
+        XCTAssertEqual(data[7], 0, "right pixel clipped")
+    }
+
+    /// Clipping to an "infinitely" tall band still lets paint through (Cairo fixed-point overflow).
+    func testHugeClipRectKeepsContent() throws {
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue))
+        ctx.clip(to: CGRect(x: 0, y: -CGFloat.greatestFiniteMagnitude / 2, width: 2, height: .greatestFiniteMagnitude))
+        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+        let data = try XCTUnwrap(ctx.makeImage()?.dataProvider?.data)
+        XCTAssertEqual(data[3], 255, "inside the band")
+        XCTAssertEqual(data[3 * 4 + 3], 0, "outside the band")
+    }
+}
+
+final class FlippedMaskClipTests: XCTestCase {
+    /// WMPRenderer's sequence: scene space is y-down (translate+flip), a mask is applied with a
+    /// counter-flip around the frame's centre, then the flip is undone and the artwork drawn.
+    /// A mask whose top-left pixel keeps must let paint through at the scene's top-left.
+    func testCounterFlippedMaskKeepsTopLeft() throws {
+        let pixels: [UInt8] = [255, 0, 0, 0]  // 2×2, row 0 (top) = [keep, cut]
+        let mask = try XCTUnwrap(CGImage(width: 2, height: 2, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: 2,
+                                         space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: 0),
+                                         provider: CGDataProvider(data: Data(pixels))!, decode: nil,
+                                         shouldInterpolate: false, intent: .defaultIntent))
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: 2, height: 2, bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue))
+        ctx.translateBy(x: 0, y: 2)
+        ctx.scaleBy(x: 1, y: -1)                  // scene space: y down
+        let frame = CGRect(x: 0, y: 0, width: 2, height: 2), centerY = frame.midY
+        ctx.saveGState()
+        ctx.translateBy(x: 0, y: centerY); ctx.scaleBy(x: 1, y: -1); ctx.translateBy(x: 0, y: -centerY)
+        ctx.clip(to: frame, mask: mask)
+        ctx.translateBy(x: 0, y: centerY); ctx.scaleBy(x: 1, y: -1); ctx.translateBy(x: 0, y: -centerY)
+        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        ctx.fill(frame)
+        ctx.restoreGState()
+        let data = try XCTUnwrap(ctx.makeImage()?.dataProvider?.data)
+        let alphas = [data[3], data[7], data[11], data[15]]  // memory order: top-left, top-right, bottom-left, bottom-right
+        XCTAssertEqual(alphas, [255, 0, 0, 0])
+    }
+}
+
+final class TranslatedMaskClipTests: XCTestCase {
+    /// Paint under a mask clip lands where the current matrix puts it, not at the origin.
+    func testMaskedPaintKeepsTranslation() throws {
+        let mask = try XCTUnwrap(CGImage(width: 4, height: 1, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: 4,
+                                         space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: 0),
+                                         provider: CGDataProvider(data: Data([255, 255, 255, 255]))!, decode: nil,
+                                         shouldInterpolate: false, intent: .defaultIntent))
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: 4, height: 1, bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue))
+        ctx.clip(to: CGRect(x: 0, y: 0, width: 4, height: 1), mask: mask)
+        ctx.translateBy(x: 2, y: 0)
+        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        let data = try XCTUnwrap(ctx.makeImage()?.dataProvider?.data)
+        XCTAssertEqual([data[3], data[7], data[11], data[15]], [0, 0, 255, 0])
+    }
+}

@@ -164,7 +164,7 @@ public func CTLineDraw(_ line: CTLine, _ context: CGContext) {
         let layout = line.makeLayout()
         if let first = pango_layout_get_line_readonly(layout, 0) {
             cairo_move_to(cr, 0, 0)
-            pango_cairo_show_layout_line(cr, first)
+            context._masked { pango_cairo_show_layout_line(cr, first) }
         }
         g_object_unref(UnsafeMutableRawPointer(layout))
         cairo_restore(cr)

@@ -30,6 +30,16 @@ public final class CGContext: @unchecked Sendable {
         var interpolation = CGInterpolationQuality.default
         var antialias = true
         var allowsAntialiasing = true
+        /// Coverage from `clip(to:mask:)`, in surface space; nil when no mask clip is active.
+        var maskClip: MaskClip?
+    }
+
+    /// An A8 surface the size of the target, holding the product of every mask clip so far.
+    /// A class so saved graphics states share it and the last one to drop it frees it.
+    final class MaskClip {
+        let surface: OpaquePointer
+        init(surface: OpaquePointer) { self.surface = surface }
+        deinit { cairo_surface_destroy(surface) }
     }
     private var gstate = GState()
     /// Set when the caller was handed the mirror (`data`) and may have written pixels Cairo has
@@ -295,7 +305,7 @@ public final class CGContext: @unchecked Sendable {
     public func endTransparencyLayer() {
         willDraw()
         cairo_pop_group_to_source(_cr)
-        cairo_paint_with_alpha(_cr, gstate.alpha)
+        masked { cairo_paint_with_alpha(_cr, gstate.alpha) }
         didDraw()
     }
 
@@ -326,7 +336,14 @@ public final class CGContext: @unchecked Sendable {
         path.replay(on: _cr)
     }
 
-    public func addRect(_ rect: CGRect) { cairo_rectangle(_cr, rect.minX, rect.minY, rect.width, rect.height) }
+    /// Cairo works in 24.8 fixed point; "infinite" rects (upstream clips text to a ±∞/2-tall band)
+    /// overflow it into an empty path, so coordinates are clamped to a range no surface reaches.
+    public func addRect(_ rect: CGRect) {
+        let limit = 1_000_000.0
+        let x0 = min(max(Double(rect.minX), -limit), limit), x1 = min(max(Double(rect.maxX), -limit), limit)
+        let y0 = min(max(Double(rect.minY), -limit), limit), y1 = min(max(Double(rect.maxY), -limit), limit)
+        cairo_rectangle(_cr, x0, y0, x1 - x0, y1 - y0)
+    }
     public func addRects(_ rects: [CGRect]) { rects.forEach(addRect) }
 
     public func addEllipse(in rect: CGRect) {
@@ -389,14 +406,14 @@ public final class CGContext: @unchecked Sendable {
         willDraw()
         setRule(rule)
         useFill()
-        cairo_fill(_cr)
+        masked { cairo_fill(_cr) }
         didDraw()
     }
 
     public func strokePath() {
         willDraw()
         useStroke()
-        cairo_stroke(_cr)
+        masked { cairo_stroke(_cr) }
         didDraw()
     }
 
@@ -404,12 +421,12 @@ public final class CGContext: @unchecked Sendable {
         setRule(mode == .eoFill || mode == .eoFillStroke ? .evenOdd : .winding)
         switch mode {
         case .fill, .eoFill:
-            useFill(); cairo_fill(_cr)
+            useFill(); masked { cairo_fill(_cr) }
         case .stroke:
-            useStroke(); cairo_stroke(_cr)
+            useStroke(); masked { cairo_stroke(_cr) }
         case .fillStroke, .eoFillStroke:
-            useFill(); cairo_fill_preserve(_cr)
-            useStroke(); cairo_stroke(_cr)
+            useFill(); masked { cairo_fill_preserve(_cr) }
+            useStroke(); masked { cairo_stroke(_cr) }
         }
         didDraw()
     }
@@ -465,7 +482,7 @@ public final class CGContext: @unchecked Sendable {
         cairo_set_operator(_cr, CAIRO_OPERATOR_CLEAR)
         cairo_new_path(_cr)
         addRect(rect)
-        cairo_fill(_cr)
+        masked { cairo_fill(_cr) }
         cairo_restore(_cr)
         didDraw()
     }
@@ -485,18 +502,83 @@ public final class CGContext: @unchecked Sendable {
         cairo_clip(_cr)
     }
 
-    /// Clips to `rect`, using `mask`'s alpha as coverage (drawn as Core Graphics would place it).
+    /// Clips to `rect`, using `mask` as coverage drawn as Core Graphics would place it: a mask
+    /// without transparency (DeviceGray) clips by brightness (white keeps), one with alpha by alpha.
+    /// Cairo has no image clip, so the coverage is rendered once into a surface-space A8 mask kept
+    /// in the graphics state, and every later paint goes through it (`masked`).
     public func clip(to rect: CGRect, mask: CGImage) {
-        cairo_push_group(_cr)
-        imagePaint(mask, in: rect, alpha: 1)
-        let group = cairo_pop_group(_cr)
         cairo_new_path(_cr)
         addRect(rect)
         cairo_clip(_cr)
-        // Cairo has no mask-as-clip; keep the mask pattern for the next paints via a group.
-        // ponytail: approximates image-mask clipping with the rect only.
-        cairo_pattern_destroy(group)
+        guard let coverage = Self.coverage(of: mask) else { return }
+        defer { cairo_surface_destroy(coverage) }
+        let target = cairo_get_target(_cr)
+        var sx = 1.0, sy = 1.0
+        cairo_surface_get_device_scale(target, &sx, &sy)
+        let w = Int32((Double(width) * sx).rounded(.up)), h = Int32((Double(height) * sy).rounded(.up))
+        guard let surface = cairo_image_surface_create(CAIRO_FORMAT_A8, w, h),
+              cairo_surface_status(surface) == CAIRO_STATUS_SUCCESS else { return }
+        cairo_surface_set_device_scale(surface, sx, sy)
+        let cr = cairo_create(surface)!
+        var matrix = cairo_matrix_t()
+        cairo_get_matrix(_cr, &matrix)
+        cairo_set_matrix(cr, &matrix)
+        cairo_translate(cr, rect.minX, rect.maxY)
+        cairo_scale(cr, rect.width / Double(mask.width), -rect.height / Double(mask.height))
+        cairo_set_source_surface(cr, coverage, 0, 0)
+        cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_GOOD)
+        cairo_rectangle(cr, 0, 0, Double(mask.width), Double(mask.height))
+        cairo_fill(cr)
+        if let previous = gstate.maskClip {
+            // Nested clips intersect: keep only what the earlier mask kept too.
+            cairo_identity_matrix(cr)
+            cairo_set_operator(cr, CAIRO_OPERATOR_IN)
+            cairo_set_source_surface(cr, previous.surface, 0, 0)
+            cairo_paint(cr)
+        }
+        cairo_destroy(cr)
+        cairo_surface_flush(surface)
+        gstate.maskClip = MaskClip(surface: surface)
     }
+
+    /// The mask's coverage as an A8 surface: alpha when it has any transparency, else brightness.
+    private static func coverage(of mask: CGImage) -> OpaquePointer? {
+        let source = mask._surface
+        cairo_surface_flush(source)
+        guard let data = cairo_image_surface_get_data(source),
+              let out = cairo_image_surface_create(CAIRO_FORMAT_A8, Int32(mask.width), Int32(mask.height)),
+              let outData = cairo_image_surface_get_data(out) else { return nil }
+        let stride = Int(cairo_image_surface_get_stride(source)), outStride = Int(cairo_image_surface_get_stride(out))
+        var hasAlpha = false
+        for y in 0..<mask.height where !hasAlpha {
+            for x in 0..<mask.width where data[y * stride + x * 4 + 3] < 255 { hasAlpha = true; break }
+        }
+        for y in 0..<mask.height {
+            for x in 0..<mask.width {
+                let p = y * stride + x * 4  // B, G, R, A (premultiplied)
+                outData[y * outStride + x] = hasAlpha ? data[p + 3] : data[p + 2]
+            }
+        }
+        cairo_surface_mark_dirty(out)
+        return out
+    }
+
+    /// Runs one Cairo paint operation through the active mask clip, if any.
+    private func masked(_ paint: () -> Void) {
+        guard let mask = gstate.maskClip else { paint(); return }
+        cairo_push_group(_cr)
+        paint()
+        // The group becomes the source under the current matrix (a source is locked to the user
+        // space it was set in); only the mask, which lives in surface space, uses identity.
+        cairo_pop_group_to_source(_cr)
+        cairo_save(_cr)
+        cairo_identity_matrix(_cr)
+        cairo_mask_surface(_cr, mask.surface, 0, 0)
+        cairo_restore(_cr)
+    }
+
+    /// For drawing done straight on `_cr` by other stand-in modules (CoreText).
+    public func _masked(_ paint: () -> Void) { masked(paint) }
 
     public func resetClip() { cairo_reset_clip(_cr) }
 
@@ -553,7 +635,7 @@ public final class CGContext: @unchecked Sendable {
         cairo_new_path(_cr)
         cairo_rectangle(_cr, 0, 0, Double(image.width), Double(image.height))
         cairo_clip(_cr)
-        cairo_paint_with_alpha(_cr, alpha)
+        masked { cairo_paint_with_alpha(_cr, alpha) }
         cairo_restore(_cr)
     }
 }
