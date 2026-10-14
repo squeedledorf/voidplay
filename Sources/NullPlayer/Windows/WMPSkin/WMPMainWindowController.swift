@@ -604,7 +604,7 @@ final class WMPMainWindowController: NSWindowController, MainWindowProviding, NS
         window.isOpaque = false
         window.hasShadow = true
         window.isMovableByWindowBackground = false
-        window.title = "NullPlayer — Windows Media Player"
+        window.title = "\(ClientIdentity.productName) — Windows Media Player"
         window.minSize = Self.unskinnedSize
         window.delegate = self
         window.center()

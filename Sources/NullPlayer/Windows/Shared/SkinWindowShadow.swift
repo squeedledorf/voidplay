@@ -5,7 +5,7 @@ import QuartzCore
 /// exempt it by type, and its own title so agent tooling can recognise it in the window list.
 final class SkinShadowWindow: NSWindow {
     /// The fixed title `winhelper` filters on. Never shown: the window has no title bar.
-    static let marker = "NullPlayer.SkinShadow"
+    static let marker = "\(ClientIdentity.productName).SkinShadow"
 
     init() {
         super.init(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: true)
@@ -72,8 +72,16 @@ final class SkinWindowShadow {
     /// At least `blur * 2 + |offset|`, so the blur is never clipped at the shadow window's edge.
     nonisolated static let pad: CGFloat = 30
 
+    /// Off by default on Linux: a shadow is its own top-level window, which a Wayland compositor
+    /// places, frames and focuses by itself; the compositor draws window shadows there anyway.
+    #if os(Linux)
+    nonisolated static let enabledByDefault = false
+    #else
+    nonisolated static let enabledByDefault = true
+    #endif
+
     nonisolated static var isEnabledPreference: Bool {
-        get { UserDefaults.standard.object(forKey: isEnabledDefaultsKey) as? Bool ?? true }
+        get { UserDefaults.standard.object(forKey: isEnabledDefaultsKey) as? Bool ?? enabledByDefault }
         set {
             UserDefaults.standard.set(newValue, forKey: isEnabledDefaultsKey)
             NotificationCenter.default.post(name: enabledDidChange, object: nil)

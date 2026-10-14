@@ -165,7 +165,6 @@ open class NSResponder: NSObject {
     open func cursorUpdate(with event: NSEvent) {}
 
     // Standard actions sent down the responder chain.
-    open func selectAll(_ sender: Any?) {}
     open func copy(_ sender: Any?) {}
     open func paste(_ sender: Any?) {}
     open func cut(_ sender: Any?) {}

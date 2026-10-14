@@ -23,6 +23,8 @@ public struct UTType: Hashable, Sendable, CustomStringConvertible {
     }
 
     public var preferredFilenameExtension: String? { filenameExtensions.first }
+    /// None known here; callers (FlyingFox) fall back to their own extension table.
+    public var preferredMIMEType: String? { nil }
     public var description: String { identifier }
 
     public func conforms(to type: UTType) -> Bool {

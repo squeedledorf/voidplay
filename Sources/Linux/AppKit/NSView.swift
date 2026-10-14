@@ -40,6 +40,10 @@ open class NSView: NSResponder {
     }
 
     open var isFlipped: Bool { false }
+
+    /// Whether this view's y axis runs opposite to its superview's (the window base is y-up). A
+    /// non-flipped view inside a flipped one needs the flip as much as a flipped view in a normal one.
+    private var flipsAgainstSuperview: Bool { isFlipped != (superview?.isFlipped ?? false) }
     open var isOpaque: Bool { false }
     open var isHidden = false { didSet { superview?.needsDisplay = true } }
     open var alphaValue: CGFloat = 1 { didSet { needsDisplay = true } }
@@ -178,7 +182,7 @@ open class NSView: NSResponder {
         guard !isHidden, alphaValue > 0 else { return }
         ctx.saveGState()
         ctx.translateBy(x: frame.origin.x, y: frame.origin.y)
-        if isFlipped {
+        if flipsAgainstSuperview {
             ctx.translateBy(x: 0, y: bounds.height)
             ctx.scaleBy(x: 1, y: -1)
         }
@@ -208,7 +212,7 @@ open class NSView: NSResponder {
     /// This view's bounds → its window's base coordinates (bottom-left origin).
     private func transformToWindow() -> CGAffineTransform {
         var t = CGAffineTransform(translationX: -bounds.origin.x, y: -bounds.origin.y)
-        if isFlipped { t = t.concatenating(CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: bounds.height)) }
+        if flipsAgainstSuperview { t = t.concatenating(CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: bounds.height)) }
         t = t.concatenating(CGAffineTransform(translationX: frame.origin.x, y: frame.origin.y))
         if let superview { t = t.concatenating(superview.transformToWindow()) }
         return t
@@ -262,6 +266,7 @@ open class NSView: NSResponder {
     open func acceptsFirstMouse(for event: NSEvent?) -> Bool { false }
     open func menu(for event: NSEvent) -> NSMenu? { menu }
     open var menu: NSMenu?
+    open var focusRingType: NSFocusRingType = .default
 
     /// As AppKit: a right click shows the view's context menu, else travels up the responder chain.
     open override func rightMouseDown(with event: NSEvent) {

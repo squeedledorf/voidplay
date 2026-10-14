@@ -80,6 +80,9 @@ open class NSApplication {
         }
     }
 
+    /// The app's windows (creation order).
+    open var windows: [NSWindow] { NSWindow.all }
+
     open func terminate(_ sender: Any?) {
         let note = Notification(name: Self.willTerminateNotification, object: self)
         delegate?.applicationWillTerminate(note)

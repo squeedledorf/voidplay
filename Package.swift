@@ -28,13 +28,13 @@ let package = Package(
             path: "Sources/Linux/LinuxSourcesPlugin"
         ),
         // vDSP stand-in so upstream's `import Accelerate` compiles unchanged.
-        .target(name: "Accelerate", path: "Sources/Linux/Accelerate"),
+        .target(name: "Accelerate", dependencies: ["CoreGraphics"], path: "Sources/Linux/Accelerate"),
         .systemLibrary(name: "CCairo", path: "Sources/Linux/CCairo", pkgConfig: "cairo"),
         .target(name: "CoreGraphics", dependencies: ["CCairo"], path: "Sources/Linux/CoreGraphics"),
         .systemLibrary(name: "CGdkPixbuf", path: "Sources/Linux/CGdkPixbuf", pkgConfig: "gdk-pixbuf-2.0"),
         .systemLibrary(name: "CGtk", path: "Sources/Linux/CGtk", pkgConfig: "gtk4"),
         .systemLibrary(name: "CX11", path: "Sources/Linux/CX11", pkgConfig: "gtk4-x11"),
-        .target(name: "AppKit", dependencies: ["CGdkPixbuf", "CGtk", "CX11", "CoreGraphics", "QuartzCore", "UniformTypeIdentifiers"],
+        .target(name: "AppKit", dependencies: ["CGdkPixbuf", "CGtk", "CX11", "CoreGraphics", "ImageIO", "QuartzCore", "UniformTypeIdentifiers"],
                 path: "Sources/Linux/AppKit"),
         .systemLibrary(name: "CMpv", path: "Sources/Linux/CMpv", pkgConfig: "mpv"),
         .systemLibrary(name: "CFFmpeg", path: "Sources/Linux/CFFmpeg", pkgConfig: "libavformat"),
@@ -43,6 +43,11 @@ let package = Package(
         .target(name: "CoreImage", dependencies: ["CoreGraphics"], path: "Sources/Linux/CoreImage"),
         .target(name: "UniformTypeIdentifiers", path: "Sources/Linux/UniformTypeIdentifiers"),
         .target(name: "MediaPlayer", dependencies: ["AppKit", "CGtk"], path: "Sources/Linux/MediaPlayer"),
+        .systemLibrary(name: "CJavaScriptCore", path: "Sources/Linux/CJavaScriptCore", pkgConfig: "javascriptcoregtk-4.1"),
+        .target(name: "JavaScriptCore", dependencies: ["CJavaScriptCore"], path: "Sources/Linux/JavaScriptCore"),
+        .systemLibrary(name: "CPangoFc", path: "Sources/Linux/CPangoFc", pkgConfig: "pangocairo"),
+        .target(name: "CoreText", dependencies: ["CoreGraphics", "CCairo", "CPangoFc"], path: "Sources/Linux/CoreText"),
+        .target(name: "ImageIO", dependencies: ["CoreGraphics", "CGdkPixbuf"], path: "Sources/Linux/ImageIO"),
         .target(name: "os", path: "Sources/Linux/os"),
         .target(name: "Metal", path: "Sources/Linux/Metal"),
         .target(name: "MetalKit", dependencies: ["Metal"], path: "Sources/Linux/MetalKit"),
@@ -68,7 +73,7 @@ let package = Package(
         .executableTarget(
             name: "voidplay",
             dependencies: [
-                "NullPlayerCore", "Accelerate", "AppKit", "CMpv", "QuartzCore", "CoreImage", "UniformTypeIdentifiers", "os", "Metal", "MetalKit", "MediaPlayer", "CVisClassicCore", "AVFoundation", "CoreAudio", "CryptoKit", "ZIPFoundation", "FlyingFox",
+                "NullPlayerCore", "Accelerate", "AppKit", "CMpv", "QuartzCore", "CoreImage", "UniformTypeIdentifiers", "os", "Metal", "MetalKit", "MediaPlayer", "JavaScriptCore", "CoreText", "ImageIO", "CVisClassicCore", "AVFoundation", "CoreAudio", "CryptoKit", "ZIPFoundation", "FlyingFox",
                 .product(name: "SQLite", package: "SQLite.swift"),
             ],
             path: "Sources",
@@ -79,7 +84,8 @@ let package = Package(
             resources: [.copy("NullPlayer/Resources")],
             swiftSettings: [
                 // Darwin's Foundation includes URLSession; on Linux it lives in FoundationNetworking.
-                .unsafeFlags(["-Xfrontend", "-import-module", "-Xfrontend", "FoundationNetworking"]),
+                .unsafeFlags(["-Xfrontend", "-import-module", "-Xfrontend", "FoundationNetworking",
+                              "-Xfrontend", "-import-module", "-Xfrontend", "FoundationXML"]),
             ],
             plugins: ["LinuxSources"]
         ),

@@ -153,7 +153,9 @@ open class NSWindow: NSResponder {
     open var titlebarAppearsTransparent = false
     open var identifier: NSUserInterfaceItemIdentifier?
     open var tabbingMode: Int = 0
-    open var animationBehavior: Int = 0
+    public enum AnimationBehavior: Int, Sendable { case `default` = 0, none = 2, documentWindow, utilityWindow, alertPanel }
+    open var animationBehavior: AnimationBehavior = .default
+    open var isExcludedFromWindowsMenu = false
     open var windowController: NSWindowController?
     public private(set) var isVisible = false
     public private(set) var isMiniaturized = false
@@ -336,6 +338,19 @@ open class NSWindow: NSResponder {
 
     open func setContentSize(_ size: NSSize) {
         setFrame(NSRect(x: frame.minX, y: frame.maxY - size.height, width: size.width, height: size.height), display: true)
+    }
+
+    /// AppKit keeps a titled window's top on screen; skinned windows here are placed exactly.
+    /// ponytail: returns the rect unchanged; clamp when an off-screen window shows up in practice.
+    open func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
+
+    open func invalidateCursorRects(for view: NSView) {}
+
+    /// Front-to-back position among the app's windows (creation order here: Wayland exposes no
+    /// stacking order).
+    open var orderedIndex: Int {
+        get { NSWindow.all.firstIndex { $0 === self } ?? 0 }
+        set {}
     }
 
     open func center() {

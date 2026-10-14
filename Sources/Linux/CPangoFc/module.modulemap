@@ -1,0 +1,7 @@
+module CPangoFc [system] {
+    header "shim.h"
+    link "pangoft2-1.0"
+    link "pangocairo-1.0"
+    link "fontconfig"
+    export *
+}

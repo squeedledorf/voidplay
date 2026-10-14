@@ -49,7 +49,7 @@ struct WMPSkinImporter {
             let applicationSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
                 ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             self.directoryURL = applicationSupport
-                .appendingPathComponent("NullPlayer", isDirectory: true)
+                .appendingPathComponent(ClientIdentity.dataDirectoryName, isDirectory: true)
                 .appendingPathComponent("WMPSkins", isDirectory: true)
         }
     }

@@ -92,3 +92,18 @@ final class CGContextTests: XCTestCase {
         XCTAssertEqual(path.boundingBox.height, 20, accuracy: 0.001)
     }
 }
+
+final class AlphaOnlyContextTests: XCTestCase {
+    /// An 8-bit alpha-only context (one byte per pixel) receives coverage, and stays in its buffer.
+    func testAlphaOnlyContextHoldsCoverage() throws {
+        var bytes = [UInt8](repeating: 0, count: 4 * 2)
+        try bytes.withUnsafeMutableBytes { raw in
+            let context = try XCTUnwrap(CGContext(data: raw.baseAddress, width: 4, height: 2, bitsPerComponent: 8,
+                                                  bytesPerRow: 4, space: CGColorSpaceCreateDeviceGray(),
+                                                  bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue))
+            context.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+            context.fill(CGRect(x: 0, y: 0, width: 2, height: 2))
+        }
+        XCTAssertEqual(bytes, [255, 255, 0, 0, 255, 255, 0, 0])
+    }
+}

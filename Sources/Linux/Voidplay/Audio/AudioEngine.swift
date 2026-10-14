@@ -569,6 +569,7 @@ class AudioEngine {
         switch event {
         case .fileLoaded:
             mpvDuration = mpv.double("duration")
+            fillFormatInfo()
             if pendingRequeue {
                 pendingRequeue = false
                 replaceQueuedNext()
@@ -592,6 +593,19 @@ class AudioEngine {
         default:
             break
         }
+    }
+
+    /// kbps and kHz for the main window, which Winamp skins always show: what the demuxer reports,
+    /// else (local files) size over length, as upstream's `Track(url:)` estimates it.
+    private func fillFormatInfo() {
+        guard let track = currentTrack, track.bitrate == nil || track.sampleRate == nil else { return }
+        let sampleRate = mpv.double("current-tracks/audio/demux-samplerate").map { Int($0) }
+        var bitrate = mpv.double("current-tracks/audio/demux-bitrate").map { Int($0 / 1000) }
+        if bitrate == nil, track.url.isFileURL, let size = mpv.double("file-size"), let length = mpvDuration, length > 0 {
+            bitrate = Int(size * 8 / length / 1000)
+        }
+        guard sampleRate != nil || bitrate != nil else { return }
+        currentTrack = track.withFormat(bitrate: track.bitrate ?? bitrate, sampleRate: track.sampleRate ?? sampleRate)
     }
 
     private func trackDidFinish() {
@@ -740,6 +754,7 @@ class AudioEngine {
             let left = balance > 0 ? 1 - Double(balance) : 1, right = balance < 0 ? 1 + Double(balance) : 1
             filters.append("lavfi=[pan=stereo|c0=\(left)*c0|c1=\(right)*c1]")
         }
+        filters += wmpWOWController.filters
         mpv.set("af", filters.joined(separator: ","))
         mpv.set("speed", Double(tuningController.rate))
     }
@@ -753,6 +768,40 @@ class AudioEngine {
     }
 
     var mpvAudioDevices: [[String: Any]] { mpv.node("audio-device-list") as? [[String: Any]] ?? [] }
+
+    // MARK: Playback options upstream's settings and WMP skins read
+
+    /// WMP's SRS WOW: stereo widening and TruBass, as mpv filters (see `applyAudioFilters`).
+    lazy var wmpWOWController = WMPWOWController(defaults: .standard) { [weak self] in self?.applyAudioFilters() }
+
+    /// ponytail: stored and persisted only; crossfading and loudness normalization are not on
+    /// Linux yet, so these change nothing audible.
+    var volumeNormalizationEnabled = UserDefaults.standard.bool(forKey: "volumeNormalizationEnabled") {
+        didSet { UserDefaults.standard.set(volumeNormalizationEnabled, forKey: "volumeNormalizationEnabled") }
+    }
+    var sweetFadeEnabled = UserDefaults.standard.bool(forKey: "sweetFadeEnabled") {
+        didSet { UserDefaults.standard.set(sweetFadeEnabled, forKey: "sweetFadeEnabled") }
+    }
+    var sweetFadeDuration: TimeInterval = (UserDefaults.standard.object(forKey: "sweetFadeDuration") as? Double) ?? 5 {
+        didSet { UserDefaults.standard.set(sweetFadeDuration, forKey: "sweetFadeDuration") }
+    }
+
+    var eqConfiguration: EQConfiguration { activeEQConfiguration }
+
+    func seekBy(seconds: TimeInterval) {
+        seek(to: max(0, min(duration, currentTime + seconds)))
+    }
+
+    /// Replaces the playlist without starting playback (upstream's state-restore entry point).
+    func setPlaylistTracks(_ tracks: [Track]) {
+        stop()
+        playlist = tracks
+        shuffle.clear()
+        currentIndex = -1
+        currentTrack = nil
+        delegate?.audioEngineDidChangePlaylist()
+        enrichPlaylistDurationsAsync(for: tracks.map(\.id))
+    }
 
     // MARK: Analysis (VisualizationTap, fed by PipeWireCapture)
 
@@ -878,5 +927,19 @@ class AudioEngine {
                     id: eventId, title: track.title, artist: track.artist, album: track.album)
             }
         }
+    }
+}
+
+extension Track {
+    /// The same track with format details filled in (everything else copied).
+    func withFormat(bitrate: Int?, sampleRate: Int?) -> Track {
+        Track(id: id, url: url, title: title, artist: artist, album: album, duration: duration,
+              bitrate: bitrate, sampleRate: sampleRate, channels: channels,
+              plexRatingKey: plexRatingKey, plexServerId: plexServerId, subsonicId: subsonicId,
+              subsonicServerId: subsonicServerId, jellyfinId: jellyfinId, jellyfinServerId: jellyfinServerId,
+              embyId: embyId, embyServerId: embyServerId, artworkThumb: artworkThumb, mediaType: mediaType,
+              genre: genre, playHistoryContentTypeOverride: playHistoryContentTypeOverride,
+              contentType: contentType, cueStartOffset: cueStartOffset, cueEndOffset: cueEndOffset,
+              cueSourceURL: cueSourceURL, isRadioOrigin: isRadioOrigin, isYouTubeOrigin: isYouTubeOrigin)
     }
 }

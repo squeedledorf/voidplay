@@ -3,6 +3,10 @@ import CCairo
 
 /// On Linux, `x as CFData` is an identity cast so upstream's `Data(...) as CFData` compiles.
 public typealias CFData = Data
+// Core Foundation types as the Swift values they bridge to (there is no toll-free bridging here).
+public typealias CFString = String
+public typealias CFURL = URL
+public typealias CFDictionary = [String: Any]
 
 public struct CGBitmapInfo: OptionSet, Sendable {
     public let rawValue: UInt32
@@ -40,6 +44,8 @@ struct PixelLayout: Equatable {
     var r: Int, g: Int, b: Int, a: Int?   // a == nil: opaque (alpha none/skip)
     var premultiplied: Bool
     var bytesPerPixel = 4
+    /// One byte per pixel holding only alpha (`CGImageAlphaInfo.alphaOnly`); colour reads as black.
+    var alphaOnly = false
 
     /// Cairo's ARGB32: premultiplied, native-endian 0xAARRGGBB, i.e. B,G,R,A bytes on little-endian.
     static let cairo = PixelLayout(r: 2, g: 1, b: 0, a: 3, premultiplied: true)
@@ -54,6 +60,11 @@ struct PixelLayout: Equatable {
         let alpha = CGImageAlphaInfo(rawValue: bitmapInfo & CGBitmapInfo.alphaInfoMask.rawValue) ?? .none
         if bitsPerPixel == 24 {
             self.init(r: 0, g: 1, b: 2, a: nil, premultiplied: true, bytesPerPixel: 3)
+            return
+        }
+        if bitsPerPixel == 8, alpha == .alphaOnly {
+            self.init(r: 0, g: 0, b: 0, a: 0, premultiplied: true, bytesPerPixel: 1)
+            alphaOnly = true
             return
         }
         if bitsPerPixel == 8, alpha == .none {
@@ -83,8 +94,14 @@ struct PixelLayout: Equatable {
             for x in 0..<width {
                 let sp = y * srcStride + x * srcLayout.bytesPerPixel
                 let dp = y * dstStride + x * dstLayout.bytesPerPixel
-                var r = Int(s[sp + srcLayout.r]), g = Int(s[sp + srcLayout.g]), b = Int(s[sp + srcLayout.b])
+                var r = srcLayout.alphaOnly ? 0 : Int(s[sp + srcLayout.r])
+                var g = srcLayout.alphaOnly ? 0 : Int(s[sp + srcLayout.g])
+                var b = srcLayout.alphaOnly ? 0 : Int(s[sp + srcLayout.b])
                 let a = srcLayout.a.map { Int(s[sp + $0]) } ?? 255
+                if dstLayout.alphaOnly {
+                    d[dp] = UInt8(a)
+                    continue
+                }
                 if srcLayout.a != nil, !srcLayout.premultiplied, dstLayout.premultiplied {
                     r = (r * a + 127) / 255; g = (g * a + 127) / 255; b = (b * a + 127) / 255
                 } else if srcLayout.premultiplied, !dstLayout.premultiplied || dstLayout.a == nil, a > 0, a < 255 {

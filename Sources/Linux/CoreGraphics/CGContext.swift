@@ -32,6 +32,9 @@ public final class CGContext: @unchecked Sendable {
         var allowsAntialiasing = true
     }
     private var gstate = GState()
+    /// Set when the caller was handed the mirror (`data`) and may have written pixels Cairo has
+    /// not seen; the next drawing call or `makeImage` copies them in first.
+    private var mirrorMayBeAhead = false
     private var gstack: [GState] = []
 
     // MARK: Creation
@@ -39,7 +42,8 @@ public final class CGContext: @unchecked Sendable {
     public init?(data: UnsafeMutableRawPointer?, width: Int, height: Int, bitsPerComponent: Int,
                  bytesPerRow: Int, space: CGColorSpace, bitmapInfo: UInt32) {
         let alpha = bitmapInfo & CGBitmapInfo.alphaInfoMask.rawValue
-        let bpp = space.numberOfComponents == 1 && alpha == CGImageAlphaInfo.none.rawValue ? 8 : 32
+        let bpp = (space.numberOfComponents == 1 && alpha == CGImageAlphaInfo.none.rawValue)
+            || alpha == CGImageAlphaInfo.alphaOnly.rawValue ? 8 : 32
         guard width > 0, height > 0,
               let layout = PixelLayout(bitsPerComponent: bitsPerComponent, bitsPerPixel: bpp, bitmapInfo: bitmapInfo)
         else { return nil }
@@ -110,7 +114,7 @@ public final class CGContext: @unchecked Sendable {
 
     /// Bitmap memory, in the layout the context was created with.
     public var data: UnsafeMutableRawPointer? {
-        if let mirror { return mirror }
+        if let mirror { mirrorMayBeAhead = true; return mirror }
         guard let surface else { return nil }
         cairo_surface_flush(surface)
         return UnsafeMutableRawPointer(cairo_image_surface_get_data(surface))
@@ -119,6 +123,17 @@ public final class CGContext: @unchecked Sendable {
     /// Copies Cairo's pixels into the caller's memory when it uses another layout.
     /// ponytail: converts the whole bitmap per drawing call; fine for the small sampling contexts
     /// that use foreign layouts, needs a dirty rect if a big one shows up in a profile.
+    /// Brings pixels the caller wrote through `data` into Cairo before Cairo draws or is read.
+    private func willDraw() {
+        guard mirrorMayBeAhead, let mirror, let mirrorLayout, let surface else { return }
+        mirrorMayBeAhead = false
+        cairo_surface_flush(surface)
+        PixelLayout.convert(from: mirror, mirrorLayout, srcStride: bytesPerRow,
+                            to: cairo_image_surface_get_data(surface), .cairo,
+                            dstStride: Int(cairo_image_surface_get_stride(surface)), width: width, height: height)
+        cairo_surface_mark_dirty(surface)
+    }
+
     private func didDraw() {
         guard let mirror, let mirrorLayout, let surface else { return }
         cairo_surface_flush(surface)
@@ -133,6 +148,7 @@ public final class CGContext: @unchecked Sendable {
     }
 
     public func makeImage() -> CGImage? {
+        willDraw()
         let target = cairo_get_target(_cr)
         cairo_surface_flush(target)
         guard cairo_surface_get_type(target) == CAIRO_SURFACE_TYPE_IMAGE,
@@ -211,6 +227,16 @@ public final class CGContext: @unchecked Sendable {
         cairo_set_dash(_cr, lengths.map(Double.init), Int32(lengths.count), Double(phase))
     }
 
+    /// Where text drawn next starts (CoreText's CTLineDraw), in user space.
+    public var textPosition: CGPoint = .zero
+    /// Font smoothing is Cairo's font options' business; text follows `setShouldAntialias`.
+    public func setShouldSmoothFonts(_ value: Bool) {}
+    /// Whether text drawn now should be antialiased (for the CoreText stand-in).
+    public var _textAntialiased: Bool { gstate.antialias && gstate.allowsAntialiasing }
+    /// Called by drawing done straight on `_cr` from other stand-in modules (CoreText).
+    public func _didDrawExternally() { didDraw() }
+    public func _willDrawExternally() { willDraw() }
+
     public func setShouldAntialias(_ value: Bool) {
         gstate.antialias = value
         cairo_set_antialias(_cr, value && gstate.allowsAntialiasing ? CAIRO_ANTIALIAS_DEFAULT : CAIRO_ANTIALIAS_NONE)
@@ -267,6 +293,7 @@ public final class CGContext: @unchecked Sendable {
     public func beginTransparencyLayer(auxiliaryInfo: Any?) { cairo_push_group(_cr) }
 
     public func endTransparencyLayer() {
+        willDraw()
         cairo_pop_group_to_source(_cr)
         cairo_paint_with_alpha(_cr, gstate.alpha)
         didDraw()
@@ -359,6 +386,7 @@ public final class CGContext: @unchecked Sendable {
     }
 
     public func fillPath(using rule: CGPathFillRule = .winding) {
+        willDraw()
         setRule(rule)
         useFill()
         cairo_fill(_cr)
@@ -366,6 +394,7 @@ public final class CGContext: @unchecked Sendable {
     }
 
     public func strokePath() {
+        willDraw()
         useStroke()
         cairo_stroke(_cr)
         didDraw()
@@ -388,6 +417,7 @@ public final class CGContext: @unchecked Sendable {
     public func fill(_ rect: CGRect) { fill([rect]) }
 
     public func fill(_ rects: [CGRect]) {
+        willDraw()
         cairo_new_path(_cr)
         rects.forEach(addRect)
         fillPath()
@@ -430,6 +460,7 @@ public final class CGContext: @unchecked Sendable {
     }
 
     public func clear(_ rect: CGRect) {
+        willDraw()
         cairo_save(_cr)
         cairo_set_operator(_cr, CAIRO_OPERATOR_CLEAR)
         cairo_new_path(_cr)
@@ -480,6 +511,7 @@ public final class CGContext: @unchecked Sendable {
     /// Paints `image` so its top row lands at `rect.maxY`, as Core Graphics does: upright in a
     /// y-up space, upside down in a flipped one (callers that flip compensate, as on macOS).
     public func draw(_ image: CGImage, in rect: CGRect, byTiling: Bool = false) {
+        willDraw()
         if byTiling {
             cairo_save(_cr)
             cairo_new_path(_cr)

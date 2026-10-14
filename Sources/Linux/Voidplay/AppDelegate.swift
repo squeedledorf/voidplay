@@ -13,10 +13,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AudioEngineDelegate {
         windowManager.audioEngine.addSpectrumConsumer("mainWindowSpectrum")
         NowPlayingManager.shared.setup()
         windowManager.loadDefaultSkin()
-        windowManager.showMainWindow()
-        windowManager.showEqualizer()
-        windowManager.showPlaylist()
-        windowManager.snapToDefaultPositions()
+        if windowManager.launchesInWMPMode {
+            windowManager.showWMPMode()
+        } else {
+            windowManager.showMainWindow()
+            windowManager.showEqualizer()
+            windowManager.showPlaylist()
+            windowManager.snapToDefaultPositions()
+        }
+
+        // Load a skin from the environment (for testing), as upstream's NULLPLAYER_SKIN.
+        #if DEBUG
+        if let skinPath = ProcessInfo.processInfo.environment["VOIDPLAY_SKIN"] {
+            let url = URL(fileURLWithPath: skinPath)
+            if url.pathExtension.lowercased() == "wmz" { windowManager.loadWMPSkin(from: url) }
+            else { windowManager.loadSkin(from: url) }
+        }
+        #endif
 
         let files = CommandLine.arguments.dropFirst()
             .filter { !$0.hasPrefix("-") }

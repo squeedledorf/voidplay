@@ -15,6 +15,7 @@ final class EQProfileResolver {
     static func queueTitle(_ title: String, marked: Bool) -> String { marked ? "∿ \(title)" : title }
     func queueTitle(for track: Track) -> String { Self.queueTitle(track.playlistTitle, marked: false) }
     func fileInfoLine(for track: Track) -> String? { nil }
+    func appliesProfile(to track: Track) -> Bool { false }
 }
 
 /// EQ profile assignment (an upstream AVAudioUnit feature) has nothing to offer on Linux yet.
@@ -106,9 +107,18 @@ enum ContextMenuBuilder {
     private static func loadSkin() {
         let panel = NSOpenPanel()
         panel.directoryURL = WindowManager.userSkinsDirectory
-        panel.allowedFileExtensions = ["wsz", "zip"]
+        panel.allowedFileExtensions = ["wsz", "zip", "wmz"]
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        WindowManager.shared.loadSkin(from: url)
+        let wm = WindowManager.shared
+        if url.pathExtension.lowercased() == "wmz" {
+            wm.loadWMPSkin(from: url)
+        } else if wm.loadSkin(from: url), wm.isRunningWMPUI {
+            wm.leaveWMPMode()
+            wm.showMainWindow()
+            wm.showEqualizer()
+            wm.showPlaylist()
+            wm.snapToDefaultPositions()
+        }
     }
 }
 

@@ -336,12 +336,27 @@ case "transform" where args.count == 5 || args.count == 6:
             FileHandle.standardError.write(Data("bad line range \(args[5])\n".utf8)); exit(2)
         }
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-        imports = lines.filter { $0.hasPrefix("import ") }.map(String.init)
+        // SwiftUI has no stand-in; a slice never needs it (whole files that do are not listed).
+        imports = lines.filter { $0.hasPrefix("import ") && $0 != "import SwiftUI" }.map(String.init)
         text = lines[(bounds[0] - 1)..<min(bounds[1], lines.count)].joined(separator: "\n")
         firstLine = bounds[0]
     }
     // Apple submodule imports (`import os.lock`) name a Swift stand-in module here.
     text = text.replacingOccurrences(of: "import os.lock", with: "import os     ")
+    // Darwin's C library is Glibc here (same length, so columns in diagnostics still line up).
+    text = text.replacingOccurrences(of: "import Darwin\n", with: "import Glibc \n")
+    // No Objective-C blocks here: block-typed closures become plain Swift closures, which the
+    // JavaScriptCore stand-in wraps as JS functions.
+    text = text.replacingOccurrences(of: "@convention(block) ", with: "")
+    // `selectAll(_:)` is overridden from extensions upstream (legal for Objective-C methods only).
+    // NSResponder here does not declare it; the responder chain finds it by selector name instead.
+    text = text.replacingOccurrences(of: "override func selectAll(", with: "         func selectAll(")
+    // A type-level `@MainActor` line gets `@preconcurrency`, matching the AppKit stand-in: the
+    // generated selector registrations call these types' action methods from nonisolated code,
+    // which Apple's Objective-C dispatch does without isolation checks.
+    text = text.split(separator: "\n", omittingEmptySubsequences: false)
+        .map { $0 == "@MainActor" ? "@preconcurrency @MainActor" : String($0) }
+        .joined(separator: "\n")
     let transformer = Transformer(text)
     var body = transformer.run()
     if !body.hasSuffix("\n") { body += "\n" }

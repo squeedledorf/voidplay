@@ -130,3 +130,56 @@ public func vDSP_vdbcon(_ a: UnsafePointer<Float>, _ ia: vDSP_Stride, _ b: Unsaf
     let alpha: Float = f == 0 ? 10 : 20
     for i in 0..<Int(n) { c[i * ic] = alpha * log10(a[i * ia] / b.pointee) }
 }
+
+// MARK: More element-wise ops (WMP outline feathering)
+
+public func vDSP_vclr(_ c: UnsafeMutablePointer<Float>, _ ic: vDSP_Stride, _ n: vDSP_Length) {
+    for i in 0..<Int(n) { c[i * ic] = 0 }
+}
+
+/// C[i] = max(A[i], B[i])
+public func vDSP_vmax(_ a: UnsafePointer<Float>, _ ia: vDSP_Stride, _ b: UnsafePointer<Float>, _ ib: vDSP_Stride,
+                      _ c: UnsafeMutablePointer<Float>, _ ic: vDSP_Stride, _ n: vDSP_Length) {
+    for i in 0..<Int(n) { c[i * ic] = max(a[i * ia], b[i * ib]) }
+}
+
+/// D[i] = A[i] >= B ? C : −C
+public func vDSP_vthrsc(_ a: UnsafePointer<Float>, _ ia: vDSP_Stride, _ b: UnsafePointer<Float>,
+                        _ c: UnsafePointer<Float>, _ d: UnsafeMutablePointer<Float>, _ id: vDSP_Stride, _ n: vDSP_Length) {
+    for i in 0..<Int(n) { d[i * id] = a[i * ia] >= b.pointee ? c.pointee : -c.pointee }
+}
+
+/// C[i] = A[i] + B
+public func vDSP_vsadd(_ a: UnsafePointer<Float>, _ ia: vDSP_Stride, _ b: UnsafePointer<Float>,
+                       _ c: UnsafeMutablePointer<Float>, _ ic: vDSP_Stride, _ n: vDSP_Length) {
+    for i in 0..<Int(n) { c[i * ic] = a[i * ia] + b.pointee }
+}
+
+/// C = Σ A[i]
+public func vDSP_sve(_ a: UnsafePointer<Float>, _ ia: vDSP_Stride, _ c: UnsafeMutablePointer<Float>, _ n: vDSP_Length) {
+    var sum: Float = 0
+    for i in 0..<Int(n) { sum += a[i * ia] }
+    c.pointee = sum
+}
+
+/// C[i] = A + i·B
+public func vDSP_vramp(_ a: UnsafePointer<Float>, _ b: UnsafePointer<Float>, _ c: UnsafeMutablePointer<Float>,
+                       _ ic: vDSP_Stride, _ n: vDSP_Length) {
+    for i in 0..<Int(n) { c[i * ic] = a.pointee + Float(i) * b.pointee }
+}
+
+/// C[i] = |A[i]|
+public func vDSP_vabs(_ a: UnsafePointer<Float>, _ ia: vDSP_Stride, _ c: UnsafeMutablePointer<Float>,
+                      _ ic: vDSP_Stride, _ n: vDSP_Length) {
+    for i in 0..<Int(n) { c[i * ic] = abs(a[i * ia]) }
+}
+
+/// Packs A[i] where B[i] ≠ 0 into C, in order.
+public func vDSP_vcmprs(_ a: UnsafePointer<Float>, _ ia: vDSP_Stride, _ b: UnsafePointer<Float>, _ ib: vDSP_Stride,
+                        _ c: UnsafeMutablePointer<Float>, _ ic: vDSP_Stride, _ n: vDSP_Length) {
+    var out = 0
+    for i in 0..<Int(n) where b[i * ib] != 0 {
+        c[out * ic] = a[i * ia]
+        out += 1
+    }
+}

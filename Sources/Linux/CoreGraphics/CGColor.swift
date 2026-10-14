@@ -4,9 +4,16 @@ public final class CGColorSpace: @unchecked Sendable {
     public let name: String
     public init?(name: String) { self.name = name }
     public static let sRGB = "kCGColorSpaceSRGB"
+    public static let linearGray = "kCGColorSpaceLinearGray"
+    public static let genericGrayGamma2_2 = "kCGColorSpaceGenericGrayGamma2_2"
     public static let genericRGBLinear = "kCGColorSpaceGenericRGBLinear"
     public static let deviceRGB = CGColorSpace(name: "kCGColorSpaceDeviceRGB")!
     public var numberOfComponents: Int { name.contains("Gray") ? 1 : 3 }
+    public var model: CGColorSpaceModel { name.contains("Gray") ? .monochrome : .rgb }
+}
+
+public enum CGColorSpaceModel: Int32, Sendable {
+    case unknown = -1, monochrome, rgb, cmyk, lab, deviceN, indexed, pattern, XYZ
 }
 
 public func CGColorSpaceCreateDeviceRGB() -> CGColorSpace { .deviceRGB }
@@ -45,7 +52,7 @@ public final class CGColor: @unchecked Sendable, Equatable {
     public static let white = CGColor(gray: 1, alpha: 1)
     public static let clear = CGColor(gray: 0, alpha: 0)
 
-    var rgba: (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
+    public var rgba: (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
         guard let c = components, c.count >= 4 else { return (0, 0, 0, 1) }
         return (c[0], c[1], c[2], c[3])
     }

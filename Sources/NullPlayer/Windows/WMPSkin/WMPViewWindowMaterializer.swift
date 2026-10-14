@@ -104,7 +104,7 @@ final class WMPViewWindowMaterializer: NSObject, NSWindowDelegate {
             window.hasShadow = false
             window.isMovableByWindowBackground = false
             window.isReleasedWhenClosed = false
-            window.title = "NullPlayer — \(viewID)"
+            window.title = "\(ClientIdentity.productName) — \(viewID)"
             window.delegate = self
             window.setAccessibilityIdentifier("WMPSkinView_\(viewID)")
             window.setAccessibilityLabel("Windows Media Player \(viewID) Window")

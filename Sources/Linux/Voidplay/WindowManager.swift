@@ -17,6 +17,8 @@ final class WindowManager {
     private(set) var mainWindowController: MainWindowProviding?
     private(set) var playlistWindowController: PlaylistWindowProviding?
     private(set) var equalizerWindowController: EQWindowProviding?
+    /// The `.wmz` player while a WMP skin is the UI (WMPMode.swift); nil in classic mode.
+    var wmpMainWindowController: WMPMainWindowController?
 
     // MARK: Preferences (upstream semantics, classic values)
 
@@ -34,11 +36,11 @@ final class WindowManager {
     var hideTitleBars: Bool { false }
     var isAlwaysOnTop = false
     var isWindowLayoutLocked = false
-    var uiMode: PlayerUIMode { .classic }
+    var uiMode: PlayerUIMode { wmpMainWindowController == nil ? .classic : .wmp }
     var isRunningModernUI: Bool { false }
-    var isRunningWMPUI: Bool { false }
+    var isRunningWMPUI: Bool { wmpMainWindowController != nil }
     var isModernUIEnabled: Bool { false }
-    var runningControllerFamily: PlayerUIControllerFamily { .classic }
+    var runningControllerFamily: PlayerUIControllerFamily { isRunningWMPUI ? .wmp : .classic }
 
     var playlistChromeScale: CGFloat {
         if let main = mainWindowController?.window, main.frame.width > 0 { return main.frame.width / Skin.baseMainSize.width }
@@ -210,6 +212,7 @@ final class WindowManager {
     private let snapThreshold: CGFloat = 15
     private let dockThreshold: CGFloat = 3
     private var draggingWindow: NSWindow?
+    var isWindowDragInProgress: Bool { draggingWindow != nil && (NSEvent.pressedMouseButtons & 0x1) != 0 }
     private var dockedWindowsToMove: [NSWindow] = []
     private var dockedWindowOffsets: [ObjectIdentifier: NSPoint] = [:]
     private var isSnappingWindow = false

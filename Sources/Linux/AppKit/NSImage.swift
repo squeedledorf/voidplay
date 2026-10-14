@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import CoreGraphics
 import CGdkPixbuf
 
@@ -50,31 +51,7 @@ open class NSImage: @unchecked Sendable {
 
     // MARK: Decoding
 
-    private static func decode(_ data: Data) -> CGImage? {
-        guard let loader = gdk_pixbuf_loader_new() else { return nil }
-        defer { g_object_unref(UnsafeMutableRawPointer(loader)) }
-        let wrote = data.withUnsafeBytes { bytes -> Bool in
-            guard let base = bytes.bindMemory(to: UInt8.self).baseAddress else { return false }
-            return gdk_pixbuf_loader_write(loader, base, gsize(bytes.count), nil) != 0
-        }
-        let closed = gdk_pixbuf_loader_close(loader, nil) != 0
-        guard wrote, closed, let pixbuf = gdk_pixbuf_loader_get_pixbuf(loader) else { return nil }
-        let width = Int(gdk_pixbuf_get_width(pixbuf)), height = Int(gdk_pixbuf_get_height(pixbuf))
-        let channels = Int(gdk_pixbuf_get_n_channels(pixbuf)), stride = Int(gdk_pixbuf_get_rowstride(pixbuf))
-        guard channels == 3 || channels == 4, let pixels = gdk_pixbuf_read_pixels(pixbuf) else { return nil }
-        // gdk-pixbuf rows are padded to `stride`; the last row may be short, so copy row by row.
-        var packed = Data(count: stride * height)
-        packed.withUnsafeMutableBytes { dst in
-            for y in 0..<height {
-                memcpy(dst.baseAddress! + y * stride, pixels + y * stride, width * channels)
-            }
-        }
-        let alpha = channels == 4 ? CGImageAlphaInfo.last : CGImageAlphaInfo.none
-        return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: channels * 8, bytesPerRow: stride,
-                       space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: alpha.rawValue),
-                       provider: CGDataProvider(data: packed)!, decode: nil, shouldInterpolate: true,
-                       intent: .defaultIntent)
-    }
+    private static func decode(_ data: Data) -> CGImage? { decodeImage(data) }
 
     // MARK: Representations
 

@@ -166,6 +166,7 @@ extension NSColor {
     public static let windowBackgroundColor = NSColor(white: 0.196, alpha: 1)
     public static let controlBackgroundColor = NSColor(white: 0.118, alpha: 1)
     public static let controlColor = NSColor(white: 1, alpha: 0.25)
+    public static let disabledControlTextColor = NSColor(white: 1, alpha: 0.35)
     public static let controlTextColor = NSColor(white: 0.87, alpha: 1)
     public static let separatorColor = NSColor(white: 1, alpha: 0.1)
     public static let gridColor = NSColor(white: 0.3, alpha: 1)

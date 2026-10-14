@@ -55,3 +55,48 @@ final class ImageDrawingTests: XCTestCase {
     }
 }
 
+
+final class FlippedViewDrawingTests: XCTestCase {
+    private final class FlippedImageView: NSView {
+        var image: NSImage?
+        override var isFlipped: Bool { true }
+        override func draw(_ dirtyRect: NSRect) {
+            image?.draw(in: bounds, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
+        }
+    }
+
+    /// A flipped view drawing with respectFlipped keeps the image upright: its top row on top.
+    func testFlippedViewDrawsImageUpright() throws { try MainActor.assumeIsolated {
+        // 1×2 image: top row red, bottom row blue (memory row 0 = top).
+        let pixels: [UInt8] = [255, 0, 0, 255, 0, 0, 255, 255]
+        let cg = try XCTUnwrap(CGImage(width: 1, height: 2, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: 4,
+                                       space: CGColorSpaceCreateDeviceRGB(),
+                                       bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                                       provider: CGDataProvider(data: Data(pixels))!, decode: nil,
+                                       shouldInterpolate: false, intent: .defaultIntent))
+        let view = FlippedImageView(frame: NSRect(x: 0, y: 0, width: 1, height: 2))
+        view.image = NSImage(cgImage: cg, size: NSSize(width: 1, height: 2))
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: 1, height: 2, bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue))
+        view.drawTree(in: ctx, dirty: view.bounds)
+        let out = try XCTUnwrap(ctx.makeImage()).dataProvider!.data!
+        XCTAssertEqual([out[2], out[1], out[0]], [255, 0, 0], "top row should be red")
+        XCTAssertEqual([out[6], out[5], out[4]], [0, 0, 255], "bottom row should be blue")
+    } }
+}
+
+final class NestedFlipTests: XCTestCase {
+    private final class Flipped: NSView { override var isFlipped: Bool { true } }
+
+    /// A normal view inside a flipped one keeps its own y-up space: (0, 0) is its bottom-left,
+    /// which sits at the bottom of its frame in the flipped parent.
+    func testNormalChildOfFlippedParentConvertsUpright() { MainActor.assumeIsolated {
+        let parent = Flipped(frame: NSRect(x: 0, y: 0, width: 10, height: 10))
+        let child = NSView(frame: NSRect(x: 0, y: 2, width: 10, height: 4))  // parent rows 2..6, from the top
+        parent.addSubview(child)
+        // Child's bottom-left is parent y 6 (flipped), i.e. window y 4 (y-up, height 10).
+        XCTAssertEqual(child.convert(NSPoint(x: 0, y: 0), to: nil).y, 4, accuracy: 0.001)
+        XCTAssertEqual(child.convert(NSPoint(x: 0, y: 4), to: nil).y, 8, accuracy: 0.001)
+    } }
+}
