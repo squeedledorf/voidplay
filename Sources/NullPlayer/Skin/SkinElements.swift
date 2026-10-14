@@ -577,6 +577,10 @@ struct SkinElements {
         
         /// Bottom border height (decorative border, no control bar)
         static let bottomHeight: CGFloat = 7
+
+        /// The classic playlist's own bottom control bar (ADD/REM/SEL/MISC, running time, mini
+        /// transport, LIST OPTS, resize grip): pledit.bmp's 38px bottom row, as Winamp draws it.
+        static let controlBarHeight: CGFloat = 38
         
         // === TITLE BAR (active: y=0, inactive: y=21) ===
         // Total width: 25 + 100 + 25 + 25 = 175px (tiled to fill)

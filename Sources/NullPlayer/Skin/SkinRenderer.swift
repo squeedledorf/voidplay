@@ -2470,8 +2470,6 @@ class SkinRenderer {
     /// Draw the complete playlist window using skin sprites
     func drawPlaylistWindow(in context: CGContext, bounds: NSRect, isActive: Bool,
                             pressedButton: PlaylistButtonType?, scrollPosition: CGFloat) {
-        let bottomHeight = SkinElements.Playlist.bottomHeight
-        
         // Fill background with playlist colors first
         skin.playlistColors.normalBackground.setFill()
         context.fill(bounds)
@@ -2482,8 +2480,7 @@ class SkinRenderer {
         // Draw side borders
         drawPlaylistSideBorders(in: context, bounds: bounds)
         
-        // Bottom strip: rotated side-tile so it matches the left/right borders.
-        drawPlaylistStyleBottomBorder(in: context, bounds: bounds, bottomHeight: bottomHeight)
+        drawPlaylistBottomBar(in: context, bounds: bounds, pressedButton: pressedButton)
         
         // Scrollbar removed - users scroll with trackpad/wheel
     }
@@ -2763,7 +2760,54 @@ class SkinRenderer {
     private func drawPlaylistSideBorders(in context: CGContext, bounds: NSRect) {
         drawPlaylistStyleSideBorders(in: context, bounds: bounds,
                                      titleHeight: SkinElements.Playlist.titleHeight,
-                                     bottomHeight: SkinElements.Playlist.bottomHeight)
+                                     bottomHeight: SkinElements.Playlist.controlBarHeight)
+    }
+
+    /// The classic playlist's bottom control bar from pledit.bmp: the 125px left corner (ADD, REM,
+    /// SEL, MISC), the 150px right corner (running time, mini transport, track time, LIST OPTS,
+    /// resize grip) and the 25px tile between them. Without pledit.bmp, the thin border.
+    func drawPlaylistBottomBar(in context: CGContext, bounds: NSRect, pressedButton: PlaylistButtonType?) {
+        let barHeight = SkinElements.Playlist.controlBarHeight
+        guard let pleditImage = skin.pledit else {
+            drawPlaylistStyleBottomBorder(in: context, bounds: bounds, bottomHeight: barHeight)
+            return
+        }
+        let barY = bounds.height - barHeight
+        var x: CGFloat = 125
+        while x < bounds.width - 150 {
+            let width = min(25, bounds.width - 150 - x)
+            drawSprite(from: pleditImage, sourceRect: SkinElements.Playlist.bottomTile,
+                       to: NSRect(x: x, y: barY, width: width, height: barHeight), in: context)
+            x += 25
+        }
+        drawSprite(from: pleditImage, sourceRect: SkinElements.Playlist.bottomLeftCorner,
+                   to: NSRect(x: 0, y: barY, width: 125, height: barHeight), in: context)
+        drawSprite(from: pleditImage, sourceRect: SkinElements.Playlist.bottomRightCorner,
+                   to: NSRect(x: bounds.width - 150, y: barY, width: 150, height: barHeight), in: context)
+        if let pressed = pressedButton, let rect = Self.playlistBarButtonRect(pressed, width: bounds.width) {
+            NSColor(calibratedWhite: 0.2, alpha: 0.4).setFill()
+            context.fill(rect.offsetBy(dx: 0, dy: barY))
+        }
+    }
+
+    /// A control in the playlist's bottom bar, in bar coordinates (y from the bar's top), measured
+    /// on Winamp's base-2.91 pledit.bmp. Right-corner controls are anchored to the window's width.
+    static func playlistBarButtonRect(_ button: PlaylistButtonType, width: CGFloat) -> NSRect? {
+        let right = width - 150
+        switch button {
+        case .add: return NSRect(x: 11, y: 8, width: 25, height: 20)
+        case .rem: return NSRect(x: 40, y: 8, width: 25, height: 20)
+        case .sel: return NSRect(x: 69, y: 8, width: 25, height: 20)
+        case .misc: return NSRect(x: 98, y: 8, width: 25, height: 20)
+        case .list: return NSRect(x: right + 103, y: 8, width: 25, height: 20)
+        case .miniPrevious: return NSRect(x: right + 4, y: 21, width: 9, height: 10)
+        case .miniPlay: return NSRect(x: right + 13, y: 21, width: 10, height: 10)
+        case .miniPause: return NSRect(x: right + 23, y: 21, width: 10, height: 10)
+        case .miniStop: return NSRect(x: right + 33, y: 21, width: 9, height: 10)
+        case .miniNext: return NSRect(x: right + 42, y: 21, width: 9, height: 10)
+        case .miniOpen: return NSRect(x: right + 51, y: 21, width: 9, height: 10)
+        default: return nil
+        }
     }
     
     // MARK: - Playlist Fallback Rendering

@@ -97,7 +97,7 @@ class PlaylistView: NSView {
         let rightBorder: CGFloat
 
         static let classic = PlaylistChrome(titleBarHeight: 20,
-                                            bottomBarHeight: SkinElements.Playlist.bottomHeight,
+                                            bottomBarHeight: SkinElements.Playlist.controlBarHeight,
                                             leftBorder: 12, rightBorder: 12)
     }
 
@@ -561,7 +561,12 @@ class PlaylistView: NSView {
         let selectedText = style.map { $0.legibleText(.white, on: $0.background) } ?? .white
         drawTrackList(in: context, colors: colors, selectedText: selectedText, drawBounds: drawBounds)
 
-        // Bottom bar removed - no track info or playback time rendering needed
+        // The bottom control bar's readouts, in the skin's font (upstream removed the bar; the
+        // Linux fork keeps Winamp's): running time of the queue, and the current track's time.
+        if style == nil {
+            drawBottomBarInfo(in: context, drawBounds: drawBounds, renderer: renderer)
+            drawPlaybackTime(in: context, drawBounds: drawBounds, renderer: renderer)
+        }
 
         context.restoreGState()
 
@@ -1029,78 +1034,32 @@ class PlaylistView: NSView {
         }
     }
 
-    /// Draw track count and total time info in bottom bar using skin font
-    /// Shows REMAINING tracks and countdown time
+    /// The running-time readout in the bottom bar, in the skin font: as Winamp, the selected
+    /// tracks' total length over the whole playlist's.
     private func drawBottomBarInfo(in context: CGContext, drawBounds: NSRect, renderer: SkinRenderer) {
-        let engine = WindowManager.shared.audioEngine
-        let tracks = engine.playlist
-        let isVideoActive = WindowManager.shared.isVideoActivePlayback
-
-        // Don't draw if no tracks
+        let tracks = WindowManager.shared.audioEngine.playlist
         guard !tracks.isEmpty else { return }
 
-        // Get current track index (0-based), -1 means no track loaded
-        let currentIndex = max(0, engine.currentIndex)
-
-        // Calculate remaining tracks (including current track)
-        let remainingTracks = max(0, tracks.count - currentIndex)
-
-        // Calculate remaining time:
-        // - Time left in current track
-        // - Plus duration of all tracks after current
-        var remainingSeconds = 0
-
-        // Add remaining time in current track
-        // Use video time if video is active, otherwise use audio engine
-        let currentTime: TimeInterval
-        let currentDuration: TimeInterval
-        let isPlaying: Bool
-
-        if isVideoActive {
-            currentTime = WindowManager.shared.videoCurrentTime
-            currentDuration = WindowManager.shared.videoDuration
-            isPlaying = WindowManager.shared.isVideoPlaying
-        } else {
-            currentTime = engine.currentTime
-            currentDuration = engine.duration
-            isPlaying = engine.state == .playing
+        // Winamp's running time: the selected tracks' length / the whole playlist's.
+        func clock(_ seconds: Int) -> String {
+            seconds >= 3600 ? String(format: "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
+                            : String(format: "%d:%02d", seconds / 60, seconds % 60)
         }
-
-        if isPlaying || currentTime > 0 {
-            remainingSeconds += max(0, Int(currentDuration - currentTime))
-        } else if currentIndex < tracks.count {
-            // Not playing yet, add full duration of current track
-            remainingSeconds += Int(tracks[currentIndex].duration ?? 0)
-        }
-
-        // Add duration of all tracks after current
-        for i in (currentIndex + 1)..<tracks.count {
-            remainingSeconds += Int(tracks[i].duration ?? 0)
-        }
-
-        let remainingMinutes = remainingSeconds / 60
-        let remainingHours = remainingMinutes / 60
-
-        // Build the info string for skin font
-        let trackCountStr = "\(remainingTracks)/"
-        let remainingTimeStr: String
-        if remainingHours > 0 {
-            remainingTimeStr = String(format: "%d:%02d:%02d", remainingHours, remainingMinutes % 60, remainingSeconds % 60)
-        } else {
-            remainingTimeStr = String(format: "%d:%02d", remainingMinutes, remainingSeconds % 60)
-        }
+        let total = tracks.reduce(0) { $0 + Int($1.duration ?? 0) }
+        let selected = selectedIndices.filter { tracks.indices.contains($0) }
+            .reduce(0) { $0 + Int(tracks[$1].duration ?? 0) }
+        let trackCountStr = clock(selected) + "/"
+        let remainingTimeStr = clock(total)
 
         // Calculate width using skin font dimensions (5px per char for text)
         let charWidth = SkinElements.TextFont.charWidth  // 5px
         let textWidth = CGFloat(trackCountStr.count) * charWidth + CGFloat(remainingTimeStr.count) * charWidth
 
-        // Position INSIDE the bottom bar area, centered horizontally
+        // In the running-time box of the bar's right corner (Winamp's place for it).
         let bottomBarTop = drawBounds.height - Layout.bottomBarHeight
-        let leftEdge: CGFloat = 125
-        let rightEdge = drawBounds.width - 150
-        let centerX = leftEdge + (rightEdge - leftEdge - textWidth) / 2
-        let textX = max(leftEdge + 5, centerX)
-        let textY = bottomBarTop + 10  // Centered vertically in info area
+        let boxX = drawBounds.width - 150 + 7, boxWidth: CGFloat = 88
+        let textX = boxX + max(0, (boxWidth - textWidth) / 2)
+        let textY = bottomBarTop + 10
 
         // Draw using skin font (no coordinate flip needed for sprites)
         var xPos = textX
@@ -1133,7 +1092,7 @@ class PlaylistView: NSView {
 
         // Use skin text font (5x6 pixels per character)
         let charWidth = SkinElements.TextFont.charWidth
-        let minutesStr = String(minutes)
+        let minutesStr = String(format: "%02d", minutes)  // Winamp's track timer: "00:03"
         let minWidth = CGFloat(minutesStr.count) * charWidth
 
         // Position relative to the right edge
@@ -1217,42 +1176,11 @@ class PlaylistView: NSView {
     private func hitTestBottomButton(at skinPoint: NSPoint) -> SkinRenderer.PlaylistButtonType? {
         let effectiveSize = effectiveWindowSize
         let bottomY = effectiveSize.height - Layout.bottomBarHeight
-
-        // Check if in bottom bar area
         guard skinPoint.y >= bottomY && skinPoint.y < effectiveSize.height else { return nil }
-
-        let relativeY = skinPoint.y - bottomY
-        let x = skinPoint.x
-
-        // Mini transport buttons - 6 buttons: prev, play, pause, stop, next, open
-        // Based on edge clicks: Previous=134, Open=181, range=47px, spacing=9.4px
-        // Buttons are in the lower portion of the bottom bar (y >= 12)
-        if relativeY >= 12 && relativeY <= 38 && x >= 125 && x < 195 {
-            // 6 buttons equally spaced from x=134 to x=181
-            // Each button ~9.4px apart, using ~8px wide hit areas centered on each
-            if x >= 130 && x < 139 { return .miniPrevious }
-            if x >= 139 && x < 148 { return .miniPlay }
-            if x >= 148 && x < 158 { return .miniPause }
-            if x >= 158 && x < 167 { return .miniStop }
-            if x >= 167 && x < 177 { return .miniNext }
-            if x >= 177 && x < 195 { return .miniOpen }
-        }
-
-        // ADD/REM/SEL buttons in the upper-left area of the bottom bar (y=0-15)
-        // These should NOT overlap with the transport buttons
-        if relativeY >= 0 && relativeY < 15 {
-            if x >= 11 && x < 40 { return .add }
-            if x >= 40 && x < 69 { return .rem }
-            if x >= 69 && x < 98 { return .sel }
-        }
-
-        // MISC/LIST buttons on the right side
-        if x >= effectiveSize.width - 50 {
-            if x >= effectiveSize.width - 44 && x < effectiveSize.width - 22 { return .misc }
-            if x >= effectiveSize.width - 22 && x < effectiveSize.width { return .list }
-        }
-
-        return nil
+        let point = NSPoint(x: skinPoint.x, y: skinPoint.y - bottomY)
+        let buttons: [SkinRenderer.PlaylistButtonType] = [.add, .rem, .sel, .misc, .list, .miniPrevious,
+                                                          .miniPlay, .miniPause, .miniStop, .miniNext, .miniOpen]
+        return buttons.first { SkinRenderer.playlistBarButtonRect($0, width: effectiveSize.width)?.contains(point) == true }
     }
 
     /// Check if point hits the scrollbar (disabled - no scrollbar widget)
