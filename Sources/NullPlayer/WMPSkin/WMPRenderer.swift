@@ -536,7 +536,10 @@ struct WMPRenderer: @unchecked Sendable {
                                                        frame: frame,
                                                        hueShift: specification.hueShift)
                     let sourceImage = crop(specification.sourceRect, from: decoded.image)
-                    if specification.tiled {
+                    if let caps = specification.endCaps,
+                       drawSliderTrack(sourceImage, caps: caps, in: command.frame, context: context) {
+                        // Drawn: the two caps and the groove repeated between them.
+                    } else if specification.tiled {
                         context.clip(to: command.frame.cgRect)
                         let tileWidth = CGFloat(sourceImage.width), tileHeight = CGFloat(sourceImage.height)
                         if tileWidth > 0, tileHeight > 0 {
@@ -574,6 +577,43 @@ struct WMPRenderer: @unchecked Sendable {
             throw WMPFailure(WMPDiagnostic(.renderFailed, "Unable to finalize render surface."))
         }
         return image
+    }
+
+    /// A slider track with end caps: the art's first and last `caps.size` pixels along the slider
+    /// at the two ends of `frame`, the art between them repeated across the rest. False when the
+    /// art or the box is too short to have both caps, and the plain tiling then draws it.
+    private func drawSliderTrack(_ image: CGImage, caps: WMPSliderEndCaps, in frame: WMPRect,
+                                 context: CGContext) -> Bool {
+        let length = caps.vertical ? image.height : image.width
+        let cap = Int(caps.size)
+        let span = caps.vertical ? frame.height : frame.width
+        guard cap > 0, length > 2 * cap, span >= caps.size * 2 else { return false }
+        func slice(_ start: Int, _ count: Int) -> CGImage? {
+            image.cropping(to: caps.vertical
+                ? CGRect(x: 0, y: start, width: image.width, height: count)
+                : CGRect(x: start, y: 0, width: count, height: image.height))
+        }
+        func rect(_ offset: CGFloat, _ size: CGFloat) -> WMPRect {
+            caps.vertical
+                ? WMPRect(x: frame.x, y: frame.y + offset, width: CGFloat(image.width), height: size)
+                : WMPRect(x: frame.x + offset, y: frame.y, width: size, height: CGFloat(image.height))
+        }
+        guard let head = slice(0, cap), let tail = slice(length - cap, cap),
+              let groove = slice(cap, length - 2 * cap) else { return false }
+        context.interpolationQuality = .none
+        let grooveLength = CGFloat(length - 2 * cap)
+        let between = rect(caps.size, span - 2 * caps.size)
+        context.saveGState()
+        context.clip(to: between.cgRect)
+        var offset = caps.size
+        while offset < span - caps.size {
+            drawImage(groove, in: rect(offset, grooveLength), context: context)
+            offset += grooveLength
+        }
+        context.restoreGState()
+        drawImage(head, in: rect(0, caps.size), context: context)
+        drawImage(tail, in: rect(span - caps.size, caps.size), context: context)
+        return true
     }
 
     private func crop(_ rect: WMPRect?, from image: CGImage) -> CGImage {

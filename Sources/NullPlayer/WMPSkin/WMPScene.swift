@@ -19,6 +19,9 @@ struct WMPSceneImage: Hashable, Codable {
     /// the node declares no key at all. WMP's implicit transparency colour; see `WMPColorKey`.
     let implicitColorKey: WMPColor?
     let tiled: Bool
+    /// A tiled slider track's `borderSize`: that many pixels at each end of the art along the
+    /// slider are its end caps, drawn once at the ends of the box; only the art between repeats.
+    var endCaps: WMPSliderEndCaps?
     let interpolation: WMPImageInterpolation
     let mappingMask: WMPSceneMappingMask?
     /// The archive path of a `clippingImage` shaping this draw, and the colours keyed out of it.
@@ -48,6 +51,11 @@ struct WMPSceneImage: Hashable, Codable {
         self.clippingMaskKeys = clippingMaskKeys
         self.hueShift = hueShift
     }
+}
+
+struct WMPSliderEndCaps: Hashable, Codable {
+    let size: CGFloat
+    let vertical: Bool
 }
 
 /// A keyed `<SUBVIEW>`'s matte, and the key its children's artwork takes over it.
@@ -242,6 +250,8 @@ struct WMPWidget: Hashable, Codable {
     /// windowless — composited into the artwork at the node's place in the paint order, which is
     /// what `commandSplitIndex` exists for. 17 corpus skins declare `true`.
     let isWindowedEffects: Bool
+    /// A `<PLAYLIST>`'s authored `columns` (`name=Name;Duration=Time`), raw; nil when undeclared.
+    var playlistColumns: String?
 
     init(stableID: Int, nodeID: String?, kind: WMPWidgetKind, frame: WMPRect, clipRect: WMPRect?,
          label: String, toolTip: String?, minimumValue: Double? = nil, maximumValue: Double? = nil,

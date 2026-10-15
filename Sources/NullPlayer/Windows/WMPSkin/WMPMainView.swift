@@ -1059,7 +1059,10 @@ final class WMPMainView: NSView, NSViewToolTipOwner {
         for widget in native where widgetViews[widget.stableID] == nil {
             let view: NSView
             switch widget.kind {
-            case .playlist: view = WMPPlaylistSurfaceView()
+            case .playlist:
+                let playlist = WMPPlaylistSurfaceView()
+                playlist.columns = WMPPlaylistColumn.parse(widget.playlistColumns)
+                view = playlist
             case .dropdownPlaylist: view = WMPDropdownPlaylistSurfaceView(frame: .zero, pullsDown: false)
             case .popup: view = WMPPopupSurfaceView(frame: .zero)
             case .editBox: view = WMPEditBoxSurfaceView()

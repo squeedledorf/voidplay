@@ -127,6 +127,7 @@ public final class CGContext: @unchecked Sendable {
         if let mirror {
             if cairoAhead { syncMirrorFromCairo() }
             mirrorMayBeAhead = true
+            mirrorHandedOut = true
             return mirror
         }
         guard let surface else { return nil }
@@ -150,14 +151,18 @@ public final class CGContext: @unchecked Sendable {
 
     private func didDraw() {
         guard mirror != nil else { return }
-        // Memory we own is only reachable through `data`, so it is brought up to date there,
-        // once, instead of after every drawing call (a full-bitmap conversion each time).
-        if ownedMemory != nil { cairoAhead = true; return }
+        // Memory we own is only reachable through `data`, so until a caller has that pointer it
+        // is brought up to date there, once, instead of after every drawing call (a full-bitmap
+        // conversion each time). A caller holding the pointer reads it whenever it likes —
+        // upstream takes `data` first and draws after — so from then on every draw syncs.
+        if ownedMemory != nil, !mirrorHandedOut { cairoAhead = true; return }
         syncMirrorFromCairo()
     }
 
     /// Set when Cairo has pixels the mirror (owned memory) does not yet show.
     private var cairoAhead = false
+    /// Set once `data` has given the caller the mirror's address.
+    private var mirrorHandedOut = false
 
     private func syncMirrorFromCairo() {
         guard let mirror, let mirrorLayout, let surface else { return }

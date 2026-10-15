@@ -31,6 +31,18 @@ final class CGContextTests: XCTestCase {
         XCTAssertEqual(Array(buffer[8..<12]), [255, 0, 0, 255], "drawing lands in the caller's buffer")
     }
 
+    /// Upstream takes `data` first and draws after (WMP's mapping images): the pointer must show
+    /// drawing done after it was handed out.
+    func testDataPointerTakenBeforeDrawingSeesTheDrawing() throws {
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: 2, height: 1, bitsPerComponent: 8, bytesPerRow: 8,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | rgba))
+        let bytes = try XCTUnwrap(ctx.data?.assumingMemoryBound(to: UInt8.self))
+        ctx.setFillColor(red: 1, green: 1, blue: 0, alpha: 1)
+        ctx.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        XCTAssertEqual([bytes[0], bytes[1], bytes[2], bytes[3]], [255, 255, 0, 255])
+    }
+
     func testImagesDrawUprightInYUpAndInvertedWhenFlipped() throws {
         let red: [UInt8] = [255, 0, 0, 255], blue: [UInt8] = [0, 0, 255, 255]
         let img = image(rows: [red, blue], width: 1)  // memory row 0 = top = red

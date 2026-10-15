@@ -1571,6 +1571,7 @@ struct WMPSceneBuilder: @unchecked Sendable {
                     commandSplitIndex: commands.count,
                     isWindowedEffects: kind == .effects
                         && literalString(node, "windowed")?.lowercased() == "true"))
+                if kind == .playlist { widgets[widgets.count - 1].playlistColumns = literalString(node, "columns") }
             }
 
             // **A negative `zIndex` means behind the parent's own artwork, so those children are
@@ -2269,7 +2270,7 @@ struct WMPSceneBuilder: @unchecked Sendable {
         // graphics low res"*: the artwork was not resampled worse, it was being eaten.
         let declared = colors(node, names: clippingPath == nil
             ? ["transparencyColor", "clippingColor"] : ["transparencyColor"])
-        let image = WMPSceneImage(resourcePath: path, sourceRect: source,
+        var image = WMPSceneImage(resourcePath: path, sourceRect: source,
             colorKeys: declared,
             tiled: background ? backgroundTiles(node)
                 : literalString(node, "tiled")?.caseInsensitiveCompare("true") == .orderedSame,
@@ -2279,6 +2280,16 @@ struct WMPSceneBuilder: @unchecked Sendable {
             implicitColorKey: WMPBuiltInImage.named(path) == nil
                 ? WMPColorKey.implicitTransparency : nil,
             hueShift: hueShift)
+        // **A tiled slider track keeps its ends (`borderSize`).** `Headspace` draws every
+        // equaliser band and both drawer sliders from one 11x15 bitmap — a half-ball cap, one
+        // row of groove, a half-ball cap — with `borderSize="7" tiled="true"`: WMP repeats the
+        // groove between the caps. Tiling the whole bitmap stacked five balls down each band.
+        if background, image.tiled, isSlider(node.kind),
+           let border = literal(node, "borderSize"), border > 0 {
+            image.endCaps = WMPSliderEndCaps(
+                size: border,
+                vertical: literalString(node, "direction")?.caseInsensitiveCompare("vertical") == .orderedSame)
+        }
         return WMPPaintCommand(stableID: node.stableID, nodeID: node.xmlID, frame: frame,
             clipRect: clip, zIndex: z, documentOrder: node.stableID, paint: .image(image),
             alpha: alpha)

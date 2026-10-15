@@ -32,8 +32,20 @@ final class WMPPlaylistSurfaceView: NSView {
     private(set) var firstVisibleIndex = 0
     /// Points of precise scrolling delta not yet worth a whole row.
     private var scrollRemainder: CGFloat = 0
-    private let rowHeight: CGFloat = 18
+    /// WMP 7's column list fits eight rows in `Headspace`'s 140 px drawer, as its screenshots show.
+    private var rowHeight: CGFloat { columns == nil ? 18 : 17 }
     private var style = WMPSurfacePalette(viewID: "").surfaceStyle
+    /// The skin's declared `columns`; nil draws the single title line.
+    var columns: [WMPPlaylistColumn]? { didSet { needsDisplay = true } }
+    /// Where a scroll-bar thumb drag started: the pointer's y and the first row then.
+    private var thumbDrag: (y: CGFloat, first: Int)?
+    private var visibleRowCount: Int { max(1, Int(bounds.height / rowHeight)) }
+    /// The classic scroll bar's box, present in the columns layout when the list overflows.
+    private var scrollBarRect: NSRect? {
+        guard columns != nil, rows.count > visibleRowCount else { return nil }
+        return NSRect(x: bounds.maxX - WMPClassicListChrome.scrollBarWidth, y: 0,
+                      width: WMPClassicListChrome.scrollBarWidth, height: bounds.height)
+    }
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -140,6 +152,7 @@ final class WMPPlaylistSurfaceView: NSView {
         wmpWidgetTrace("playlist draw rows=\(rows.count) bounds=\(bounds.size) selected=\(selectedIndex)")
         #endif
         style.background.setFill(); bounds.fill()
+        if let columns { drawColumns(columns); return }
         let visibleRows = max(1, Int(bounds.height / rowHeight))
         let rows = rows, playing = playingRow
         for index in firstVisibleIndex..<min(rows.count, firstVisibleIndex + visibleRows) {
@@ -160,8 +173,86 @@ final class WMPPlaylistSurfaceView: NSView {
         }
     }
 
+    /// WMP 7's list: a check box, then the declared columns across the row — text columns share
+    /// the width, Time takes its widest value right-aligned — and the classic scroll bar.
+    private func drawColumns(_ columns: [WMPPlaylistColumn]) {
+        let rows = rows, playing = playingRow
+        let font = NSFont.boldSystemFont(ofSize: 11)
+        let visible = firstVisibleIndex..<min(rows.count, firstVisibleIndex + visibleRowCount)
+        let bar = scrollBarRect
+        let right = (bar?.minX ?? bounds.maxX) - 3
+        let timeWidth = columns.contains(where: \.isTime)
+            ? visible.map { index in
+                columns.filter(\.isTime).map { $0.value(of: rows[index]) }.joined()
+                    .size(withAttributes: [.font: font]).width
+            }.max().map { ceil($0) } ?? 0 : 0
+        let textColumns = columns.filter { !$0.isTime }
+        let textLeft: CGFloat = 4 + WMPClassicListChrome.checkBoxSize + 4
+        let textRight = right - (timeWidth > 0 ? timeWidth + 6 : 0)
+        let textWidth = max(0, (textRight - textLeft) / CGFloat(max(1, textColumns.count)))
+        for index in visible {
+            let top = CGFloat(index - firstVisibleIndex) * rowHeight
+            let row = NSRect(x: 0, y: top, width: right + 3, height: rowHeight)
+            let selected = selectedRows.contains(index)
+            if selected { style.selectionBackground.setFill(); row.fill() }
+            let color = selected ? style.selectionText : (index == playing ? style.currentText : style.text)
+            let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+            let box = WMPClassicListChrome.checkBoxSize
+            WMPClassicListChrome.drawCheckBox(in: NSRect(x: 4, y: top + ((rowHeight - box) / 2).rounded(.down),
+                                                         width: box, height: box))
+            for (column, spec) in textColumns.enumerated() {
+                var text = spec.value(of: rows[index])
+                if column == 0 { text = EQProfileResolver.queueTitle(text, marked: rows[index].hasEQProfile) }
+                text.draw(in: NSRect(x: textLeft + CGFloat(column) * textWidth, y: top + 1,
+                                     width: textWidth - 4, height: rowHeight - 2), withAttributes: attributes)
+            }
+            if timeWidth > 0 {
+                let time = columns.filter(\.isTime).map { $0.value(of: rows[index]) }.joined()
+                let size = time.size(withAttributes: [.font: font])
+                time.draw(at: NSPoint(x: right - size.width, y: top + 1), withAttributes: attributes)
+            }
+        }
+        if let bar {
+            WMPClassicListChrome.drawScrollBar(in: bar, first: firstVisibleIndex,
+                                               visible: visibleRowCount, total: rows.count)
+        }
+    }
+
+    /// A press on the classic scroll bar: arrows move a row, the track a page, the thumb drags.
+    private func scrollBarMouseDown(_ point: NSPoint) -> Bool {
+        guard let bar = scrollBarRect,
+              let hit = WMPClassicListChrome.hit(point, in: bar, first: firstVisibleIndex,
+                                                 visible: visibleRowCount, total: rows.count)
+        else { return false }
+        switch hit {
+        case .lineUp: firstVisibleIndex -= 1
+        case .lineDown: firstVisibleIndex += 1
+        case .pageUp: firstVisibleIndex -= visibleRowCount
+        case .pageDown: firstVisibleIndex += visibleRowCount
+        case .thumb: thumbDrag = (point.y, firstVisibleIndex)
+        }
+        clampScroll()
+        needsDisplay = true
+        return true
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let drag = thumbDrag, let bar = scrollBarRect else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        let thumb = WMPClassicListChrome.thumbRect(in: bar, first: drag.first, visible: visibleRowCount, total: rows.count)
+        let travel = bar.height - 2 * WMPClassicListChrome.scrollBarWidth - thumb.height
+        guard travel > 0 else { return }
+        let rowsPerPoint = CGFloat(rows.count - visibleRowCount) / travel
+        firstVisibleIndex = drag.first + Int(((point.y - drag.y) * rowsPerPoint).rounded())
+        clampScroll()
+        needsDisplay = true
+    }
+
+    override func mouseUp(with event: NSEvent) { thumbDrag = nil }
+
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        if scrollBarMouseDown(point) { return }
         let index = firstVisibleIndex + Int(point.y / rowHeight)
         guard rows.indices.contains(index) else { return }
         if event.modifierFlags.contains(.shift) {
