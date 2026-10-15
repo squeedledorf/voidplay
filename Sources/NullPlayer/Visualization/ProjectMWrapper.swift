@@ -811,9 +811,12 @@ extension ProjectMWrapper {
         // SPM resource bundle path
         #if os(Linux)
         // Voidplay's resources sit in SwiftPM's Linux bundle beside the executable.
-        if let linux = Bundle.module.resourcePath.map({ ($0 as NSString).appendingPathComponent("Resources/Presets") }),
-           FileManager.default.fileExists(atPath: linux) {
-            return linux
+        // (Foundation reads the bundle's Resources folder as its resource path, or not, by layout.)
+        for sub in ["Presets", "Resources/Presets"] {
+            if let linux = Bundle.module.resourcePath.map({ ($0 as NSString).appendingPathComponent(sub) }),
+               FileManager.default.fileExists(atPath: linux) {
+                return linux
+            }
         }
         #endif
         let spmBundlePath = (executableDir as NSString).appendingPathComponent("NullPlayer_NullPlayer.bundle/Resources/Presets")
@@ -860,9 +863,12 @@ extension ProjectMWrapper {
         // SPM resource bundle path
         #if os(Linux)
         // Voidplay's resources sit in SwiftPM's Linux bundle beside the executable.
-        if let linux = Bundle.module.resourcePath.map({ ($0 as NSString).appendingPathComponent("Resources/Textures") }),
-           FileManager.default.fileExists(atPath: linux) {
-            return linux
+        // (Foundation reads the bundle's Resources folder as its resource path, or not, by layout.)
+        for sub in ["Textures", "Resources/Textures"] {
+            if let linux = Bundle.module.resourcePath.map({ ($0 as NSString).appendingPathComponent(sub) }),
+               FileManager.default.fileExists(atPath: linux) {
+                return linux
+            }
         }
         #endif
         let spmBundlePath = (executableDir as NSString).appendingPathComponent("NullPlayer_NullPlayer.bundle/Resources/Textures")
