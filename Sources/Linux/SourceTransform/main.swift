@@ -360,6 +360,7 @@ case "transform" where args.count == 5 || args.count == 6:
     }
     // Apple submodule imports (`import os.lock`) name a Swift stand-in module here.
     text = text.replacingOccurrences(of: "import os.lock", with: "import os     ")
+    text = text.replacingOccurrences(of: "import OpenGL.GL3", with: "import OpenGL    ")
     // Darwin's C library is Glibc here (same length, so columns in diagnostics still line up).
     text = text.replacingOccurrences(of: "import Darwin\n", with: "import Glibc \n")
     // No Objective-C blocks here: block-typed closures become plain Swift closures, which the

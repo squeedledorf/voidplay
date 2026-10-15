@@ -45,7 +45,16 @@ open class NSView: NSResponder {
     /// non-flipped view inside a flipped one needs the flip as much as a flipped view in a normal one.
     private var flipsAgainstSuperview: Bool { isFlipped != (superview?.isFlipped ?? false) }
     open var isOpaque: Bool { false }
-    open var isHidden = false { didSet { superview?.needsDisplay = true } }
+    open var isHidden = false {
+        didSet {
+            superview?.needsDisplay = true
+            guard isHidden != oldValue else { return }
+            if isHidden { viewDidHide() } else { viewDidUnhide() }
+        }
+    }
+    open var isHiddenOrHasHiddenAncestor: Bool { isHidden || (superview?.isHiddenOrHasHiddenAncestor ?? false) }
+    open func viewDidHide() {}
+    open func viewDidUnhide() {}
     open var alphaValue: CGFloat = 1 { didSet { needsDisplay = true } }
     open var autoresizingMask: AutoresizingMask = []
     open var autoresizesSubviews = true
@@ -94,7 +103,14 @@ open class NSView: NSResponder {
     // MARK: Hierarchy
 
     open func addSubview(_ view: NSView) {
-        view.removeFromSuperview()
+        // Only a view leaving another parent is removed through the overridable method: upstream
+        // views tear themselves down in `removeFromSuperview` (the WMP effects surface), and a
+        // first mount or a re-add to the same parent must not read as one.
+        if let parent = view.superview, parent !== self {
+            view.removeFromSuperview()
+        } else {
+            subviews.removeAll { $0 === view }
+        }
         subviews.append(view)
         view.superview = self
         view.nextResponder = self

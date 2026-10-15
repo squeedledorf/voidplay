@@ -1,0 +1,6 @@
+// The system libprojectM 4 (upstream vendors macOS headers for the same API).
+module CProjectM [system] {
+    header "shim.h"
+    link "projectM-4"
+    export *
+}

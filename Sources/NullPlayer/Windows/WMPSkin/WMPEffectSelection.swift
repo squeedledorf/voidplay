@@ -73,8 +73,13 @@ final class WMPEffectSelection {
     private(set) var index: Int
     private(set) var preset: Int = 0
     /// Written by the surface that applied the preset, because only the running engine knows what
-    /// preset number that landed on. Never posts a change: it is a report, not a choice.
-    var presetTitle: String = ""
+    /// preset number that landed on. It is a report, not a choice — but a skin draws it
+    /// (`Headspace`'s chooser binds `visEffects.currentPresetTitle`), and nothing else changes when
+    /// it arrives, so a *new* title posts for the readout to refresh. The surface re-applies the
+    /// same preset and reports the same title, which posts nothing.
+    var presetTitle: String = "" {
+        didSet { if presetTitle != oldValue, !presetTitle.isEmpty { post() } }
+    }
 
     private init() {
         // WMP's compact Spikes is a better first effect for the tiny, framed rectangles these
@@ -135,7 +140,9 @@ final class WMPEffectSelection {
     private func post() { NotificationCenter.default.post(name: Self.didChange, object: self) }
 
     var snapshot: WMPEffectsSnapshot {
+        // An effect with no presets of its own (Spikes, Bars…) is named by its title: WMP always
+        // had a name to show beside a running visualization, never a blank.
         WMPEffectsSnapshot(type: current.id, title: current.title,
-                           preset: preset, presetTitle: presetTitle)
+                           preset: preset, presetTitle: presetTitle.isEmpty ? current.title : presetTitle)
     }
 }

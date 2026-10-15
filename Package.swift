@@ -34,7 +34,26 @@ let package = Package(
         .systemLibrary(name: "CGdkPixbuf", path: "Sources/Linux/CGdkPixbuf", pkgConfig: "gdk-pixbuf-2.0"),
         .systemLibrary(name: "CGtk", path: "Sources/Linux/CGtk", pkgConfig: "gtk4"),
         .systemLibrary(name: "CX11", path: "Sources/Linux/CX11", pkgConfig: "gtk4-x11"),
-        .target(name: "AppKit", dependencies: ["CGdkPixbuf", "CGtk", "CX11", "CoreGraphics", "CoreText", "ImageIO", "QuartzCore", "UniformTypeIdentifiers"],
+        // OpenGL: glvnd's libOpenGL made current through EGL (NSOpenGLContext in AppKit).
+        .systemLibrary(name: "COpenGL", path: "Sources/Linux/COpenGL"),
+        .systemLibrary(name: "CEGL", path: "Sources/Linux/CEGL"),
+        .target(name: "OpenGL", dependencies: ["COpenGL"], path: "Sources/Linux/OpenGL"),
+        .target(name: "CoreVideo", dependencies: ["CoreGraphics"], path: "Sources/Linux/CoreVideo"),
+        // No pkgConfig: projectM 4.1.6's .pc says `-l:projectM-4`, which no linker resolves.
+        .systemLibrary(name: "CProjectM", path: "Sources/Linux/CProjectM"),
+        .target(
+            name: "CGeissCore",
+            path: "Sources/CGeissCore",
+            exclude: ["upstream/main.cpp", "upstream/LICENSE", "upstream/README.md", "PORT_NOTES.md", "linux_prelude.h"],
+            publicHeadersPath: "include",
+            cxxSettings: [
+                .headerSearchPath("."),
+                .headerSearchPath("upstream"),
+                .headerSearchPath("upstream_port"),
+                .unsafeFlags(["-fno-strict-aliasing", "-fwrapv", "-include", "linux_prelude.h"]),
+            ]
+        ),
+        .target(name: "AppKit", dependencies: ["CGdkPixbuf", "CGtk", "CX11", "CoreGraphics", "CoreText", "ImageIO", "QuartzCore", "UniformTypeIdentifiers", "CEGL", "OpenGL"],
                 path: "Sources/Linux/AppKit"),
         .systemLibrary(name: "CMpv", path: "Sources/Linux/CMpv", pkgConfig: "mpv"),
         .systemLibrary(name: "CFFmpeg", path: "Sources/Linux/CFFmpeg", pkgConfig: "libavformat"),
@@ -75,7 +94,7 @@ let package = Package(
         .executableTarget(
             name: "voidplay",
             dependencies: [
-                "NullPlayerCore", "Accelerate", "AppKit", "CMpv", "QuartzCore", "CoreImage", "UniformTypeIdentifiers", "os", "Metal", "MetalKit", "MediaPlayer", "CAubio", "JavaScriptCore", "CoreText", "ImageIO", "CVisClassicCore", "AVFoundation", "CoreAudio", "CryptoKit", "ZIPFoundation", "FlyingFox",
+                "NullPlayerCore", "Accelerate", "AppKit", "OpenGL", "CoreVideo", "CProjectM", "CGeissCore", "CMpv", "QuartzCore", "CoreImage", "UniformTypeIdentifiers", "os", "Metal", "MetalKit", "MediaPlayer", "CAubio", "JavaScriptCore", "CoreText", "ImageIO", "CVisClassicCore", "AVFoundation", "CoreAudio", "CryptoKit", "ZIPFoundation", "FlyingFox",
                 .product(name: "SQLite", package: "SQLite.swift"),
             ],
             path: "Sources",

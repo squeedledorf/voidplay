@@ -285,6 +285,14 @@ struct WMPObservablePropertyRegistry: @unchecked Sendable {
         // these two paths — the corpus's own selector for what the surface draws (W101).
         case "mediacenter.effecttype": return .string(snapshot.effects.type)
         case "mediacenter.effectpreset": return .number(Double(snapshot.effects.preset))
+        // `visEffects` is listed as a host root above, so its readouts were answered "" before
+        // the element's own properties were ever asked: `Headspace`'s visualization chooser binds
+        // `value="wmpprop:visEffects.currentPresetTitle"` and drew a blank label over a running
+        // preset.
+        case "viseffects.currentpresettitle": return .string(snapshot.effects.presetTitle)
+        case "viseffects.currenteffecttitle": return .string(snapshot.effects.title)
+        case "viseffects.currenteffecttype": return .string(snapshot.effects.type)
+        case "viseffects.currentpreset": return .number(Double(snapshot.effects.preset))
         default: return nil
         }
     }

@@ -299,7 +299,9 @@ final class WMPEffectsSurfaceView: NSView, VisualizationMenuTarget {
     private func applyPreset(to view: VisualizationGLView, engine: VisualizationType) {
         let wanted = WMPEffectSelection.shared.preset
         guard wanted != appliedPreset else { return }
-        appliedPreset = wanted
+        // Marked applied only once an engine took it: the engine is built on its first frame, so
+        // the first call finds no presets yet, and marking it then meant the preset — and the
+        // title the skin draws — was never applied at all.
         switch engine {
         case .projectM:
             guard view.presetCount > 0 else { return }
@@ -317,6 +319,7 @@ final class WMPEffectsSurfaceView: NSView, VisualizationMenuTarget {
             view.selectTripexEffect(at: index)
             WMPEffectSelection.shared.presetTitle = view.tripexEffectName(at: index)
         }
+        appliedPreset = wanted
     }
 
     // MARK: - Drawing

@@ -106,3 +106,7 @@ Sources/NullPlayer/Waveform/WaveformModels.swift
 Sources/NullPlayer/Utilities/NSView+Redraw.swift
 Sources/NullPlayer/App/WindowManager.swift#L2334-2462@WindowManager
 Sources/NullPlayer/Waveform/WaveformAppearance.swift
+# GL visualizers: projectM (MilkDrop) and Geiss, on the OpenGL/CoreVideo/NSOpenGL stand-ins
+Sources/NullPlayer/Visualization/VisualizationGLView.swift
+Sources/NullPlayer/Visualization/ProjectMWrapper.swift
+Sources/NullPlayer/Visualization/GeissEngine.swift

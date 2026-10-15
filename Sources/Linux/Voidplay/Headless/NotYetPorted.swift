@@ -67,84 +67,38 @@ final class VideoPlayerWindowController: NSWindowController {
     func updateHostedOutputFrame(over host: NSView) {}
 }
 
-/// The OpenGL visualization view (projectM, Geiss, Tripex): the GL visualizer stage.
-/// `init?` fails, so every host falls back to its non-GL visuals; members answer empty.
-final class VisualizationGLView: NSView {
-    init?(frame frameRect: NSRect, pixelFormat: Any?) { nil }
-    required init?(coder: NSCoder) { nil }
-    var currentEngineType: VisualizationType { .projectM }
-    var isProjectMAvailable: Bool { false }
-    var isLowPowerMode: Bool { true }
-    var pcmGain: Float { 1 }
-    var normalBeatSensitivity: Float { 1 }
-    var presetCount: Int { 0 }
-    var currentPresetIndex: Int { -1 }
-    var currentPresetName: String { "" }
-    func presetName(at index: Int) -> String { "" }
-    func presetPath(at index: Int) -> String { "" }
-    func selectPreset(at index: Int, hardCut: Bool = false) {}
-    func nextPreset(hardCut: Bool = false) {}
-    func previousPreset(hardCut: Bool = false) {}
-    func randomPreset(hardCut: Bool = false) {}
-    func setCurrentPresetAsDefault() {}
-    func setPCMGain(_ gain: Float) {}
-    func setNormalBeatSensitivity(_ sensitivity: Float) {}
-    func toggleLowPowerMode() {}
-    func switchEngine(to type: VisualizationType, forceReload: Bool = false, persistPreference: Bool = true) {}
-    func renderOffscreenImage(pixelWidth: Int, pixelHeight: Int) -> CGImage? { nil }
-    func updatePCM(_ data: [Float]) {}
-    func updateSpectrum(_ data: [Float]) {}
-    func setAudioActive(_ active: Bool) {}
-    var isRendering: Bool { false }
-    func resumeRenderingAfterWindowTransition() {}
-    func stopRendering() {}
-    var geissEffectCount: Int { 0 }
-    var currentGeissEffectName: String { "" }
-    func geissEffectName(at index: Int) -> String { "" }
-    func selectGeissEffect(at index: Int) {}
-    func nextGeissEffect() {}
-    func previousGeissEffect() {}
-    func randomGeissEffect() {}
-    func randomizeGeissPalette() {}
-    func getGeissConfig() -> GeissEngine.Config? { nil }
-    func setGeissConfig(_ cfg: GeissEngine.Config) {}
-    var tripexEffectCount: Int { 0 }
-    var currentTripexEffectIndex: Int { -1 }
-    var isTripexHolding: Bool { false }
-    var tripexIntensityScale: Float = 1
-    func tripexEffectName(at index: Int) -> String { "" }
-    func selectTripexEffect(at index: Int) {}
-    func nextTripexEffect() {}
-    func previousTripexEffect() {}
-    func randomTripexEffect() {}
-    func reconfigureTripex() {}
-    func toggleTripexAudioInfo() {}
-    func toggleTripexHelp() {}
-    func toggleTripexHold() {}
-}
-
-/// Geiss and Tripex render through OpenGL with their bundled C++ cores (Sources/CGeissCore,
-/// Sources/CTripexCore): the GL visualizer stage. These carry only what settings code names.
-enum GeissEngine {
-    struct Config: Equatable {
-        var sensitivity: Float
-        var gamma: Int
-        var beatDetection: Bool
-        var syncColorToSound: Bool
-        var slideShift: Bool
-        var modeLocked: Bool
-        var paletteLocked: Bool
-        var autoSwitchSeconds: Int
-        var visMode: Int
-    }
-}
-
-enum TripexEngine {
+/// Tripex's core decodes its embedded JPEG textures through macOS ImageIO (C++, upstream_port/):
+/// until that has a Linux decoder the engine reports itself unavailable and the GL view falls back
+/// to black. Members are the ones the GL view and menus name, with upstream's defaults keys.
+final class TripexEngine: VisualizationEngine {
     enum DefaultsKey {
-        static let intensityScale = "tripexIntensityScale"
-        static let cycleInterval = "tripexCycleInterval"
-        static let cycleMode = "tripexCycleMode"
+        static let lastEffectIndex   = "tripex.lastEffectIndex"
+        static let lockedEffectIndex = "tripex.lockedEffectIndex"
+        static let intensityScale    = "tripex.intensityScale"
+        static let cycleMode         = "tripex.cycleMode"
+        static let cycleInterval     = "tripex.cycleInterval"
     }
+    init(width: Int, height: Int) {}
+    var isAvailable: Bool { false }
+    var displayName: String { "Tripex" }
+    func setViewportSize(width: Int, height: Int) {}
+    func addPCMMono(_ samples: [Float]) {}
+    func renderFrame() {}
+    func cleanup() {}
+    var effectCount: Int { 0 }
+    var currentEffectIndex: Int { -1 }
+    var isHolding: Bool { false }
+    var intensityScale: Float = 1
+    func effectName(at index: Int) -> String { "" }
+    func nextEffect() {}
+    func previousEffect() {}
+    func randomEffect() {}
+    func selectEffect(at index: Int) {}
+    func reconfigure() {}
+    func toggleHold() {}
+    func setHold(_ on: Bool) {}
+    func toggleAudioInfo() {}
+    func toggleHelp() {}
 }
 
 // MARK: Winamp Modern (.wal) pieces not on Linux yet

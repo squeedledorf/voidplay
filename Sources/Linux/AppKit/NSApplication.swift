@@ -30,6 +30,7 @@ open class NSApplication {
 
     public static let didFinishLaunchingNotification = Notification.Name("NSApplicationDidFinishLaunchingNotification")
     public static let willTerminateNotification = Notification.Name("NSApplicationWillTerminateNotification")
+    public static let didChangeScreenParametersNotification = Notification.Name("NSApplicationDidChangeScreenParametersNotification")
 
     public weak var delegate: NSApplicationDelegate?
     private var loop: OpaquePointer?

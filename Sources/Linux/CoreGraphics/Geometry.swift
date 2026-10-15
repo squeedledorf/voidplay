@@ -80,3 +80,6 @@ public enum CGBlendMode: Int32, Sendable {
          sourceAtop, destinationOver, destinationIn, destinationOut, destinationAtop, xor,
          plusDarker, plusLighter
 }
+
+/// A display's id (Quartz Display Services); nothing on Linux hands one out.
+public typealias CGDirectDisplayID = UInt32

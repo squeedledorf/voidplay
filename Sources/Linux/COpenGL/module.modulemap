@@ -1,0 +1,5 @@
+module COpenGL [system] {
+    header "shim.h"
+    link "OpenGL"
+    export *
+}

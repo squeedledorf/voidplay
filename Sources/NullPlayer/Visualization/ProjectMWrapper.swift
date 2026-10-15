@@ -809,6 +809,13 @@ extension ProjectMWrapper {
         let executableDir = (executablePath as NSString).deletingLastPathComponent
         
         // SPM resource bundle path
+        #if os(Linux)
+        // Voidplay's resources sit in SwiftPM's Linux bundle beside the executable.
+        if let linux = Bundle.module.resourcePath.map({ ($0 as NSString).appendingPathComponent("Resources/Presets") }),
+           FileManager.default.fileExists(atPath: linux) {
+            return linux
+        }
+        #endif
         let spmBundlePath = (executableDir as NSString).appendingPathComponent("NullPlayer_NullPlayer.bundle/Resources/Presets")
         if FileManager.default.fileExists(atPath: spmBundlePath) {
             NSLog("ProjectMWrapper: Found presets at SPM bundle path: %@", spmBundlePath)
@@ -851,6 +858,13 @@ extension ProjectMWrapper {
         let executableDir = (executablePath as NSString).deletingLastPathComponent
         
         // SPM resource bundle path
+        #if os(Linux)
+        // Voidplay's resources sit in SwiftPM's Linux bundle beside the executable.
+        if let linux = Bundle.module.resourcePath.map({ ($0 as NSString).appendingPathComponent("Resources/Textures") }),
+           FileManager.default.fileExists(atPath: linux) {
+            return linux
+        }
+        #endif
         let spmBundlePath = (executableDir as NSString).appendingPathComponent("NullPlayer_NullPlayer.bundle/Resources/Textures")
         if FileManager.default.fileExists(atPath: spmBundlePath) {
             return spmBundlePath
